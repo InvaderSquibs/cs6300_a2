@@ -33,6 +33,10 @@ class RecipeSearchTool(Tool):
         "or 'NO_RECIPES_FOUND: [error message]' for validation purposes."
     )
     
+    def __init__(self):
+        super().__init__()
+        self._search_cache = {}  # Cache search results to ensure consistency
+    
     inputs: dict = {
         "query": {
             "type": "string", 
@@ -105,23 +109,28 @@ class RecipeSearchTool(Tool):
                     ]
                 })
             
-            # Extract recipe content from first result
-            recipe_data = self._extract_recipe_content(search_results[0])
+            # Extract recipe content from all results
+            recipes_data = []
+            for result in search_results:
+                recipe_data = self._extract_recipe_content(result)
+                # Only include recipes that don't have extraction errors
+                if "error" not in recipe_data:
+                    recipes_data.append(recipe_data)
             
-            # Validate recipe data
-            if "error" in recipe_data:
+            # If no valid recipes found, return error
+            if not recipes_data:
                 return json.dumps({
-                    "error": f"Recipe extraction failed: {recipe_data['error']}",
+                    "error": "No valid recipes found",
                     "query": query,
-                    "suggestions": ["Try a different recipe", "Check if the URL is accessible"]
+                    "suggestions": ["Try a different search term", "Check if recipe sites are accessible"]
                 })
             
             return json.dumps({
                 "success": True,
                 "query": query,
-                "recipes": [recipe_data],  # Array for future multiple recipes
+                "recipes": recipes_data,  # Return all valid recipes
                 "search_metadata": {
-                    "total_results": len(search_results),
+                    "total_results": len(recipes_data),
                     "timestamp": time.time(),
                     "search_engine": "duckduckgo"
                 }
@@ -228,13 +237,48 @@ class RecipeSearchTool(Tool):
         Note:
             This method targets specific recipe websites for better quality results.
             If the search fails, an empty list is returned.
+            Results are cached to ensure consistency across multiple calls.
         """
+        # Check cache first to ensure consistent results
+        if query in self._search_cache:
+            return self._search_cache[query]
+        
         try:
             with DDGS() as ddgs:
-                # Search for recipes with the query, targeting recipe sites
+                # Search for recipes using natural DuckDuckGo results
                 # Note: query already has 'recipe' appended if needed by _improve_search_query
-                search_query = f"{query} site:allrecipes.com OR site:foodnetwork.com OR site:epicurious.com OR site:bonappetit.com"
-                results = list(ddgs.text(search_query, max_results=5))
+                results = list(ddgs.text(query, max_results=10))
+                
+                # Filter out known problematic sites and prioritize working ones
+                filtered_results = []
+                blocked_domains = ['foodnetwork.com']  # Sites that consistently block our requests
+                roundup_keywords = ['roundup', 'collection', 'best', 'top', 'list', 'guide', 'favorite', 'delicious', 'scrumptious', 'easy', 'simple']  # Avoid recipe roundup pages
+                
+                for result in results:
+                    url = result.get('href', '')
+                    title = result.get('title', '').lower()
+                    
+                    # Skip blocked domains
+                    if any(domain in url for domain in blocked_domains):
+                        continue
+                    
+                    # Skip recipe roundup/collection pages (they don't have single recipes)
+                    if any(keyword in title for keyword in roundup_keywords):
+                        continue
+                    
+                    # Prioritize known working recipe sites
+                    if any(domain in url for domain in ['allrecipes.com', 'epicurious.com', 'bonappetit.com', 'tasty.co', 'delish.com']):
+                        filtered_results.append(result)
+                    else:
+                        # Include other recipe sites as fallback
+                        if any(keyword in url.lower() for keyword in ['recipe', 'cooking', 'food']):
+                            filtered_results.append(result)
+                
+                # Take up to 5 results
+                results = filtered_results[:5]
+                
+                # Cache the results to ensure consistency
+                self._search_cache[query] = results
                 return results
         except Exception as e:
             print(f"Search error: {e}")

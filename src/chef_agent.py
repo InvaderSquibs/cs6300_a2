@@ -57,7 +57,7 @@ def create_chef_agent():
         tools=tools,
         model=model,
         additional_authorized_imports=['json'],
-        max_steps=5  # Allow more steps for complex recipe tasks
+        max_steps=3  # Reduce steps to prevent loops
     )
     
     return agent
@@ -73,11 +73,18 @@ def show_help():
     print("USAGE:")
     print("  python3.11 chef_agent.py                    # Interactive mode")
     print("  python3.11 chef_agent.py help               # Show this help")
+    print()
+    print("NATURAL LANGUAGE REQUESTS:")
+    print("  python3.11 chef_agent.py \"I'd like some pancakes please\"")
+    print("  python3.11 chef_agent.py \"I'd like some pancakes please\" --restrictions vegan,keto")
+    print("  python3.11 chef_agent.py \"Find me a chocolate cake recipe\" --restrictions gluten-free")
+    print()
+    print("LEGACY COMMANDS:")
     print("  python3.11 chef_agent.py search \"query\"     # Search for recipes")
     print("  python3.11 chef_agent.py search \"query\" --diet \"restrictions\"  # Search with dietary restrictions")
     print("  python3.11 chef_agent.py extract \"url\"      # Extract recipe from URL")
     print("  python3.11 chef_agent.py test               # Test connection")
-    print("  python3.11 chef_agent.py e2e                # End-to-end test (vegan pancakes)")
+    print("  python3.11 chef_agent.py e2e                # End-to-end test (basic pancakes)")
     print("  python3.11 chef_agent.py e2e --diet \"restrictions\"  # End-to-end test with dietary restrictions")
     print("  python3.11 chef_agent.py tools              # Tool-by-tool test with JSON outputs")
     print("  python3.11 chef_agent.py tools --diet \"restrictions\"  # Tool-by-tool test with dietary restrictions")
@@ -103,10 +110,15 @@ def show_help():
     
     print("EXAMPLES:")
     print("=" * 10)
+    print('  python3.11 chef_agent.py "I\'d like some pancakes please"')
+    print('  python3.11 chef_agent.py "I\'d like some pancakes please" --restrictions vegan,gluten-free')
+    print('  python3.11 chef_agent.py "Find me a bread recipe" --restrictions keto')
+    print('  python3.11 chef_agent.py "I want to make cookies" --restrictions paleo,dairy-free')
+    print('  python3.11 chef_agent.py "What can I make for dinner?" --restrictions vegetarian')
+    print()
+    print("LEGACY EXAMPLES:")
     print('  python3.11 chef_agent.py search "pancakes"')
     print('  python3.11 chef_agent.py search "pancakes" --diet "vegan,gluten-free"')
-    print('  python3.11 chef_agent.py search "bread" --diet "keto"')
-    print('  python3.11 chef_agent.py search "cookies" --diet "paleo,dairy-free"')
     print('  python3.11 chef_agent.py extract "https://www.allrecipes.com/recipe/191885/vegan-pancakes/"')
     print()
     print("SUPPORTED DIETARY RESTRICTIONS:")
@@ -410,6 +422,248 @@ def run_interactive():
         print(f"❌ Failed to start interactive mode: {e}")
 
 
+def run_natural_language_request_with_queue(user_prompt, dietary_restrictions=None):
+    """
+    Run a natural language request using a queue-based approach for better reliability.
+    
+    Args:
+        user_prompt (str): The user's natural language request
+        dietary_restrictions (list): List of dietary restrictions (e.g., ['vegan', 'keto'])
+    """
+    print("🧑‍🍳 AI Chef Assistant - Natural Language Request (Queue-Based)")
+    print("=" * 60)
+    
+    if dietary_restrictions:
+        print(f"🥗 Dietary restrictions: {', '.join(dietary_restrictions)}")
+    
+    print(f"🎯 User request: {user_prompt}")
+    print("=" * 60)
+    
+    try:
+        # Step 1: Search for recipes once
+        print("🔍 Step 1: Searching for recipes...")
+        from tools.recipe_search import RecipeSearchTool
+        search_tool = RecipeSearchTool()
+        
+        # Extract the main food item from the user prompt
+        # Simple extraction - look for common food words
+        food_keywords = ['cookies', 'pancakes', 'bread', 'cake', 'pasta', 'soup', 'salad', 'pizza', 'chicken', 'beef', 'fish', 'rice', 'quinoa', 'smoothie', 'muffins', 'brownies', 'pie', 'tart', 'sauce', 'dressing']
+        
+        search_query = "cookies"  # default
+        for keyword in food_keywords:
+            if keyword in user_prompt.lower():
+                search_query = keyword
+                break
+        
+        if dietary_restrictions:
+            search_result = search_tool.forward(search_query, dietary_restrictions)
+        else:
+            search_result = search_tool.forward(search_query)
+        
+        import json
+        search_data = json.loads(search_result)
+        
+        print(f"🔍 Search result: {search_result[:200]}...")
+        print(f"🔍 Search success: {search_data.get('success')}")
+        print(f"🔍 Number of recipes: {len(search_data.get('recipes', []))}")
+        
+        if not search_data.get('success') or not search_data.get('recipes'):
+            print("❌ No recipes found in search")
+            return
+        
+        # Step 2: Create queue of recipe URLs
+        recipe_queue = []
+        for recipe in search_data['recipes']:
+            recipe_queue.append({
+                'title': recipe.get('title', 'Unknown'),
+                'url': recipe.get('url', ''),
+                'description': recipe.get('description', '')
+            })
+        
+        print(f"📋 Found {len(recipe_queue)} recipes to try:")
+        for i, recipe in enumerate(recipe_queue):
+            print(f"  {i+1}. {recipe['title']}")
+        
+        # Step 3: Process recipes one by one using the agent for extraction
+        agent = create_chef_agent()
+        
+        for i, recipe in enumerate(recipe_queue):
+            print(f"\n🔍 Step {i+2}: Trying recipe {i+1}/{len(recipe_queue)}")
+            print(f"   Title: {recipe['title']}")
+            print(f"   URL: {recipe['url']}")
+            
+            # Use the agent to extract and format the recipe
+            extraction_prompt = f"Extract recipe from this URL: {recipe['url']}. Use the recipe_extraction tool, parse the JSON response, and call final_answer() with the recipe data if successful."
+            
+            try:
+                result = agent.run(extraction_prompt)
+                
+                # Debug: Print what the agent actually returned
+                print(f"🔍 Agent returned: {type(result)} - {str(result)[:200]}...")
+                
+                # Check if the agent successfully extracted a recipe
+                success = False
+                recipe_data = {}
+                ingredients = []
+                instructions = []
+                
+                # Handle different response formats from the agent
+                if isinstance(result, dict):
+                    # Format 1: Agent returns dict directly with recipe data
+                    print(f"🔍 Agent returned dict format")
+                    if 'recipe' in result:
+                        recipe_data = result['recipe']
+                        ingredients = recipe_data.get('ingredients', [])
+                        instructions = recipe_data.get('instructions', [])
+                        if ingredients and instructions:
+                            success = True
+                            print(f"✅ Successfully parsed dict recipe with {len(ingredients)} ingredients and {len(instructions)} steps")
+                else:
+                    # Format 2: Agent returns AgentText with JSON string
+                    print(f"🔍 Agent returned AgentText format")
+                    result_str = str(result)
+                    
+                    # Check if the result contains a successful extraction
+                    if '{"success": true' in result_str and '"ingredients":' in result_str and '"instructions":' in result_str:
+                        print(f"🔍 Found successful extraction in agent response")
+                        
+                        # Try to extract the JSON from the response
+                        try:
+                            import json
+                            import re
+                            
+                            # Find the JSON part of the response
+                            json_match = re.search(r'\{.*"success":\s*true.*\}', result_str, re.DOTALL)
+                            if json_match:
+                                json_str = json_match.group(0)
+                                result_data = json.loads(json_str)
+                                recipe_data = result_data.get('recipe', {})
+                                ingredients = recipe_data.get('ingredients', [])
+                                instructions = recipe_data.get('instructions', [])
+                                
+                                # Check if we have meaningful content
+                                if ingredients and instructions:
+                                    success = True
+                                    print(f"✅ Successfully parsed JSON recipe with {len(ingredients)} ingredients and {len(instructions)} steps")
+                        except Exception as e:
+                            print(f"❌ Failed to parse JSON from agent response: {e}")
+                
+                # Check if we got a successful result
+                if success:
+                    print(f"✅ Success! Found recipe with {len(ingredients)} ingredients and {len(instructions)} steps")
+                    
+                    # Format the final result
+                    final_result = {
+                        'title': recipe_data.get('title', recipe['title']),
+                        'ingredients': [ing.get('ingredient', ing.get('raw_text', str(ing))) for ing in ingredients],
+                        'instructions': [inst.get('instruction', inst.get('step', str(inst))) for inst in instructions],
+                        'prep_time': recipe_data.get('prep_time', ''),
+                        'cook_time': recipe_data.get('cook_time', ''),
+                        'servings': recipe_data.get('servings', ''),
+                        'url': recipe['url']
+                    }
+                    
+                    print("\n📋 Final Recipe:")
+                    print("=" * 20)
+                    print(f"Title: {final_result['title']}")
+                    print(f"Ingredients ({len(final_result['ingredients'])}):")
+                    for ing in final_result['ingredients']:
+                        print(f"  - {ing}")
+                    print(f"Instructions ({len(final_result['instructions'])}):")
+                    for j, inst in enumerate(final_result['instructions'], 1):
+                        print(f"  {j}. {inst}")
+                    
+                    return final_result
+                else:
+                    print(f"❌ Recipe {i+1} failed: Agent extraction unsuccessful")
+                    
+            except Exception as e:
+                print(f"❌ Recipe {i+1} failed: {e}")
+        
+        print("\n❌ All recipes failed to extract properly")
+        return None
+        
+    except Exception as e:
+        print(f"❌ Queue-based request failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def run_natural_language_request(user_prompt, dietary_restrictions=None):
+    """
+    Run a natural language request through the full agent pipeline.
+    
+    Args:
+        user_prompt (str): The user's natural language request
+        dietary_restrictions (list): List of dietary restrictions (e.g., ['vegan', 'keto'])
+    """
+    print("🧑‍🍳 AI Chef Assistant - Natural Language Request")
+    print("=" * 50)
+    
+    if dietary_restrictions:
+        print(f"🥗 Dietary restrictions: {', '.join(dietary_restrictions)}")
+    
+    print(f"🎯 User request: {user_prompt}")
+    print("=" * 50)
+    
+    try:
+        agent = create_chef_agent()
+        
+        # Create a simple, direct prompt for the agent
+        if dietary_restrictions:
+            restrictions_str = ', '.join(dietary_restrictions)
+            full_prompt = f"Find a {restrictions_str} recipe for {user_prompt}. Use recipe_search tool, then recipe_extraction tool. Parse the JSON response with json.loads(). If the extraction has 'success': true and non-empty ingredients/instructions, call final_answer() with the recipe data. Do not search again."
+        else:
+            full_prompt = f"Find a recipe for {user_prompt}. Use recipe_search tool, then recipe_extraction tool. Parse the JSON response with json.loads(). If the extraction has 'success': true and non-empty ingredients/instructions, call final_answer() with the recipe data. Do not search again."
+        
+        print(f"🤖 Processing: {full_prompt}")
+        print("=" * 50)
+        
+        # Run the agent with the natural language prompt
+        result = agent.run(full_prompt)
+        
+        print("📋 Recipe Results:")
+        print("=" * 20)
+        print(result)
+        
+        # Parse the result to validate it contains the expected elements
+        print("\n🔍 Validation:")
+        print("=" * 15)
+        
+        # Check if we got a structured recipe response
+        if isinstance(result, dict) and 'title' in result and 'ingredients' in result and 'instructions' in result:
+            print("✅ Recipe search successful")
+            print("✅ Recipe extraction successful")
+            print(f"✅ Recipe contains {len(result['ingredients'])} ingredients and {len(result['instructions'])} steps")
+            print(f"✅ Recipe title: {result['title']}")
+        elif "RECIPE_FOUND:" in str(result):
+            print("✅ Recipe search successful (legacy format)")
+        else:
+            print("❌ Recipe search failed")
+            
+        if "RECIPE_EXTRACTED:" in str(result):
+            print("✅ Recipe extraction successful (legacy format)")
+        elif isinstance(result, dict) and 'ingredients' in result and 'instructions' in result:
+            print("✅ Recipe extraction successful (structured format)")
+        else:
+            print("❌ Recipe extraction failed")
+            
+        if "INGREDIENTS:" in str(result) and "STEPS:" in str(result):
+            print("✅ Recipe contains ingredients and steps (legacy format)")
+        elif isinstance(result, dict) and 'ingredients' in result and 'instructions' in result:
+            print("✅ Recipe contains ingredients and steps (structured format)")
+        else:
+            print("❌ Recipe missing ingredients or steps")
+        
+        print("\n✅ Natural language request completed!")
+        
+    except Exception as e:
+        print(f"❌ Natural language request failed: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 def main():
     """
     Main function with command-line argument handling.
@@ -428,30 +682,45 @@ def main():
         elif command == 'tools':
             run_end_to_end_test_with_tool_outputs(['vegan'])  # Default to vegan for tools test
         else:
-            print(f"❌ Unknown command: {command}")
-            print("Use 'python3.11 chef_agent.py help' for usage information")
+            # Treat as natural language request without restrictions
+            run_natural_language_request_with_queue(sys.argv[1])
     elif len(sys.argv) == 3:
-        command = sys.argv[1].lower()
-        query = sys.argv[2]
-        if command == 'search':
-            run_search(query)
-        elif command == 'extract':
-            run_extraction(query)
-        else:
-            print(f"❌ Unknown command: {command}")
-            print("Use 'python3.11 chef_agent.py help' for usage information")
-    elif len(sys.argv) == 4:
-        command = sys.argv[1].lower()
-        diet_flag = sys.argv[2]
-        diet_restrictions = sys.argv[3]
+        # Check if this is a natural language request (quoted string) or legacy command
+        first_arg = sys.argv[1]
+        second_arg = sys.argv[2].lower()
         
-        if command == 'e2e' and diet_flag == '--diet':
-            # Parse dietary restrictions (comma-separated)
-            restrictions_list = [r.strip().lower() for r in diet_restrictions.split(',')]
-            run_end_to_end_test(restrictions_list)
+        # If second arg is a known command, treat as legacy format
+        if second_arg in ['search', 'extract']:
+            if second_arg == 'search':
+                run_search(first_arg)
+            elif second_arg == 'extract':
+                run_extraction(first_arg)
         else:
-            print(f"❌ Unknown command or flag: {command} {diet_flag}")
-            print("Use 'python3.11 chef_agent.py help' for usage information")
+            # Treat as natural language request without restrictions
+            run_natural_language_request(first_arg)
+    elif len(sys.argv) == 4:
+        # Check if this is a natural language request with restrictions
+        user_prompt = sys.argv[1]
+        flag = sys.argv[2]
+        restrictions_str = sys.argv[3]
+        
+        if flag == '--restrictions':
+            # Parse dietary restrictions (comma-separated)
+            restrictions_list = [r.strip().lower() for r in restrictions_str.split(',')]
+            run_natural_language_request_with_queue(user_prompt, restrictions_list)
+        else:
+            # Legacy command format
+            command = sys.argv[1].lower()
+            diet_flag = sys.argv[2]
+            diet_restrictions = sys.argv[3]
+            
+            if command == 'e2e' and diet_flag == '--diet':
+                # Parse dietary restrictions (comma-separated)
+                restrictions_list = [r.strip().lower() for r in diet_restrictions.split(',')]
+                run_end_to_end_test(restrictions_list)
+            else:
+                print(f"❌ Unknown command or flag: {command} {diet_flag}")
+                print("Use 'python3.11 chef_agent.py help' for usage information")
     elif len(sys.argv) == 5:
         command = sys.argv[1].lower()
         query = sys.argv[2]

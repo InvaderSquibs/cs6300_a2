@@ -305,6 +305,9 @@ class RecipeExtractionTool(Tool):
             if ingredients and len(ingredients) > 2:  # Need at least 3 ingredients to be confident
                 for ingredient in ingredients:
                     text = ingredient.get_text().strip()
+                    # Skip if the text is too long (might be entire page content)
+                    if len(text) > 500:
+                        continue
                     if self._is_valid_ingredient(text):
                         recipe["ingredients"].append({
                             "raw_text": text,
@@ -334,6 +337,9 @@ class RecipeExtractionTool(Tool):
             if instructions and len(instructions) > 0:
                 for i, instruction in enumerate(instructions, 1):
                     text = instruction.get_text().strip()
+                    # Skip if the text is too long (might be entire page content)
+                    if len(text) > 1000:
+                        continue
                     if self._is_valid_instruction(text):
                         recipe["instructions"].append({
                             "step": i,
@@ -400,12 +406,21 @@ class RecipeExtractionTool(Tool):
         if not text or len(text) < 3:
             return False
         
+        # Skip single characters or very short text
+        if len(text.strip()) <= 2:
+            return False
+        
+        # Skip if it's just whitespace or special characters
+        if not any(c.isalnum() for c in text):
+            return False
+        
         # Skip common non-ingredient text
         skip_words = [
             'ingredients', 'directions', 'instructions', 'steps',
             'cook mode', 'keep screen awake', 'oops', 'something went wrong',
             'our team is working', 'recipe was developed', 'ingredient amounts',
-            'cooking times', 'note that not all', 'original recipe', 'yields'
+            'cooking times', 'note that not all', 'original recipe', 'yields',
+            'copyright', 'all rights reserved', 'privacy policy', 'terms of service'
         ]
         
         text_lower = text.lower()
@@ -416,10 +431,19 @@ class RecipeExtractionTool(Tool):
         if not text or len(text) < 10:
             return False
         
+        # Skip single characters or very short text
+        if len(text.strip()) <= 2:
+            return False
+        
+        # Skip if it's just whitespace or special characters
+        if not any(c.isalnum() for c in text):
+            return False
+        
         # Skip common non-instruction text
         skip_words = [
             'directions', 'instructions', 'steps', 'dotdash meredith',
-            'editor\'s note', 'electric griddles', 'food studios'
+            'editor\'s note', 'electric griddles', 'food studios',
+            'copyright', 'all rights reserved', 'privacy policy', 'terms of service'
         ]
         
         text_lower = text.lower()
