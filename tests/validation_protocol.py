@@ -67,117 +67,127 @@ def test_help_documentation():
         print(f"❌ Help command failed: {stderr}")
         return False
 
-def test_individual_tool():
-    """Test 2: Individual Tool Test - Contract Format Only"""
-    print("\n2️⃣ Testing Individual Tool (Contract Format)")
-    print("-" * 40)
+def test_full_pipeline_basic():
+    """Test 2: Full Pipeline Test - Basic Recipe (No Dietary Restrictions)"""
+    print("\n2️⃣ Testing Full Pipeline - Basic Recipe")
+    print("-" * 50)
     
-    # Test multiple valid queries for better coverage
-    test_cases = [
-        # Basic queries (no dietary restrictions)
-        ("pancakes", None),
-        ("chocolate chip cookies", None),
-        # Queries with dietary restrictions
-        ("pancakes", ["vegan"]),
-        ("bread", ["gluten-free", "keto"]),
-        ("cookies", ["paleo", "dairy-free"])
-    ]
+    print(f"\n🔍 Testing: Basic pancake recipe with full toolset")
+    print(f"   Query: 'pancakes'")
+    print(f"   Dietary restrictions: None")
+    print(f"   Expected: Search → Extract → Recipe Object")
     
-    all_passed = True
+    cmd = 'python3.11 src/chef_agent.py e2e'
+    print(f"   Command: {cmd}")
+    success, stdout, stderr = run_command(cmd, timeout=180)
     
-    for query, dietary_restrictions in test_cases:
-        if dietary_restrictions:
-            restrictions_str = ",".join(dietary_restrictions)
-            print(f"Testing query: '{query}' with restrictions: {restrictions_str}")
-            cmd = f'python3.11 src/chef_agent.py search "{query}" --diet "{restrictions_str}"'
-        else:
-            print(f"Testing query: '{query}' (no restrictions)")
-            cmd = f'python3.11 src/chef_agent.py search "{query}"'
+    if success:
+        print(f"   ✅ Command executed successfully")
         
-        success, stdout, stderr = run_command(cmd)
-    
-        if success:
-            print(f"✅ Query '{query}' executed successfully")
+        # Check for LLM processing evidence
+        if "OpenAIServerModel" in stdout:
+            print(f"   ✅ LLM agent processing confirmed")
+        if "Step 1" in stdout and "Step 2" in stdout:
+            print(f"   ✅ Multi-step agent execution confirmed")
+        
+        # Check for successful pipeline completion
+        if "✅ Recipe search successful" in stdout and "✅ Recipe extraction successful" in stdout:
+            print(f"   ✅ Full pipeline stages completed: searching → extracting")
             
-            # Look for the specific contract format defined in the tool
-            if "RECIPE_FOUND:" in stdout:
-                print(f"✅ Contract-based response found for '{query}' (agent followed tool contract)")
-                # Extract and print the recipe details from the Search Results section
-                lines = stdout.split('\n')
-                for i, line in enumerate(lines):
-                    if "📋 Search Results:" in line and i + 1 < len(lines):
-                        next_line = lines[i + 1].strip()
-                        if "RECIPE_FOUND:" in next_line:
-                            print(f"📋 Recipe found: {next_line}")
-                            break
-            elif "NO_RECIPES_FOUND:" in stdout:
-                print(f"⚠️  No recipes found for '{query}'")
-                # Extract and print the error message
-                lines = stdout.split('\n')
-                for line in lines:
-                    if "NO_RECIPES_FOUND:" in line:
-                        print(f"📋 Error message: {line.strip()}")
+            # Extract and display recipe details
+            if "Recipe title:" in stdout:
+                for line in stdout.split('\n'):
+                    if "Recipe title:" in line:
+                        print(f"   📋 {line.strip()}")
                         break
-            else:
-                print(f"❌ No contract format detected for '{query}'")
-                print("Raw output preview:")
-                print(stdout[:500] + "..." if len(stdout) > 500 else stdout)
-                all_passed = False
+            
+            if "ingredients and" in stdout and "steps" in stdout:
+                for line in stdout.split('\n'):
+                    if "ingredients and" in line and "steps" in line:
+                        print(f"   📋 {line.strip()}")
+                        break
+            
+            # Check for tool execution logs
+            if "Execution logs:" in stdout:
+                print(f"   ✅ Tool execution logs present")
+            
+            # Check for final answer format
+            if "Final answer:" in stdout:
+                print(f"   ✅ Final answer format confirmed")
+            
+            return True
         else:
-            if "timed out" in stderr:
-                print(f"⚠️  Query '{query}' timed out (normal for agent operations)")
-            else:
-                print(f"❌ Query '{query}' failed: {stderr}")
-                all_passed = False
-        print()
-    
-    return all_passed
+            print(f"   ⚠️  Pipeline stages incomplete")
+            print(f"   Raw output preview:")
+            print(f"   {stdout[:300]}{'...' if len(stdout) > 300 else ''}")
+            return False
+    else:
+        if "timed out" in stderr:
+            print(f"   ⚠️  Test timed out (normal for complex operations)")
+        else:
+            print(f"   ❌ Test failed: {stderr}")
+        return False
 
-def test_dietary_restrictions():
-    """Test 2.5: Dietary Restrictions Feature Test"""
-    print("\n2️⃣.5 Testing Dietary Restrictions Feature")
-    print("-" * 40)
+def test_full_pipeline_dietary():
+    """Test 3: Full Pipeline Test - Dietary Restrictions Recipe"""
+    print("\n3️⃣ Testing Full Pipeline - Dietary Restrictions Recipe")
+    print("-" * 50)
     
-    # Test dietary restrictions functionality
-    test_cases = [
-        ("pancakes", ["vegan"], "Should find vegan pancake recipes"),
-        ("bread", ["gluten-free", "keto"], "Should find gluten-free keto bread"),
-        ("cookies", ["paleo", "dairy-free"], "Should find paleo dairy-free cookies"),
-        ("pasta", ["vegetarian"], "Should find vegetarian pasta recipes")
-    ]
+    print(f"\n🔍 Testing: Vegan pancake recipe with full toolset")
+    print(f"   Query: 'pancakes'")
+    print(f"   Dietary restrictions: vegan")
+    print(f"   Expected: Search → Extract → Recipe Object with dietary filtering")
     
-    all_passed = True
+    cmd = 'python3.11 src/chef_agent.py e2e --diet "vegan"'
+    print(f"   Command: {cmd}")
+    success, stdout, stderr = run_command(cmd, timeout=180)
     
-    for query, restrictions, description in test_cases:
-        restrictions_str = ",".join(restrictions)
-        print(f"Testing: {description}")
-        print(f"  Query: '{query}' with restrictions: {restrictions_str}")
+    if success:
+        print(f"   ✅ Command executed successfully")
         
-        cmd = f'python3.11 src/chef_agent.py search "{query}" --diet "{restrictions_str}"'
-        success, stdout, stderr = run_command(cmd)
+        # Check for LLM processing evidence
+        if "OpenAIServerModel" in stdout:
+            print(f"   ✅ LLM agent processing confirmed")
+        if "Step 1" in stdout and "Step 2" in stdout:
+            print(f"   ✅ Multi-step agent execution confirmed")
         
-        if success:
-            if "RECIPE_FOUND:" in stdout:
-                print(f"✅ Found recipe with dietary restrictions")
-                # Extract and print the recipe details
-                lines = stdout.split('\n')
-                for i, line in enumerate(lines):
-                    if "📋 Search Results:" in line and i + 1 < len(lines):
-                        next_line = lines[i + 1].strip()
-                        if "RECIPE_FOUND:" in next_line:
-                            print(f"📋 Recipe: {next_line}")
-                            break
-            else:
-                print(f"⚠️  No recipes found for '{query}' with restrictions {restrictions_str}")
+        # Check for successful pipeline completion
+        if "✅ Recipe search successful" in stdout and "✅ Recipe extraction successful" in stdout:
+            print(f"   ✅ Full pipeline stages completed: searching → extracting")
+            
+            # Extract and display recipe details
+            if "Recipe title:" in stdout:
+                for line in stdout.split('\n'):
+                    if "Recipe title:" in line:
+                        print(f"   📋 {line.strip()}")
+                        break
+            
+            if "ingredients and" in stdout and "steps" in stdout:
+                for line in stdout.split('\n'):
+                    if "ingredients and" in line and "steps" in line:
+                        print(f"   📋 {line.strip()}")
+                        break
+            
+            # Check for tool execution logs
+            if "Execution logs:" in stdout:
+                print(f"   ✅ Tool execution logs present")
+            
+            # Check for final answer format
+            if "Final answer:" in stdout:
+                print(f"   ✅ Final answer format confirmed")
+            
+            return True
         else:
-            if "timed out" in stderr:
-                print(f"⚠️  Query timed out (normal for agent operations)")
-            else:
-                print(f"❌ Query failed: {stderr}")
-                all_passed = False
-        print()
-    
-    return all_passed
+            print(f"   ⚠️  Pipeline stages incomplete")
+            print(f"   Raw output preview:")
+            print(f"   {stdout[:300]}{'...' if len(stdout) > 300 else ''}")
+            return False
+    else:
+        if "timed out" in stderr:
+            print(f"   ⚠️  Test timed out (normal for complex operations)")
+        else:
+            print(f"   ❌ Test failed: {stderr}")
+        return False
 
 def test_error_handling():
     """Test 3: Error Handling Test"""
@@ -245,6 +255,91 @@ def test_automated_tests():
         print(f"❌ Automated tests failed: {stderr}")
         return False
 
+def test_full_pipeline_comprehensive():
+    """Test 4: Full Pipeline Test - Comprehensive Recipe Object Display"""
+    print("\n4️⃣ Testing Full Pipeline - Comprehensive Recipe Object")
+    print("-" * 50)
+    
+    print(f"\n🔍 Testing: Gluten-free keto pancake recipe with full toolset")
+    print(f"   Query: 'pancakes'")
+    print(f"   Dietary restrictions: gluten-free, keto")
+    print(f"   Expected: Search → Extract → Complete Recipe Object with ingredients & steps")
+    
+    cmd = 'python3.11 src/chef_agent.py e2e --diet "gluten-free,keto"'
+    print(f"   Command: {cmd}")
+    success, stdout, stderr = run_command(cmd, timeout=180)
+    
+    if success:
+        print(f"   ✅ Command executed successfully")
+        
+        # Check for LLM processing evidence
+        if "OpenAIServerModel" in stdout:
+            print(f"   ✅ LLM agent processing confirmed")
+        if "Step 1" in stdout and "Step 2" in stdout:
+            print(f"   ✅ Multi-step agent execution confirmed")
+        
+        # Check for successful pipeline completion
+        if "✅ Recipe search successful" in stdout and "✅ Recipe extraction successful" in stdout:
+            print(f"   ✅ Full pipeline stages completed: searching → extracting")
+            
+            # Extract and display recipe details
+            if "Recipe title:" in stdout:
+                for line in stdout.split('\n'):
+                    if "Recipe title:" in line:
+                        print(f"   📋 {line.strip()}")
+                        break
+            
+            if "ingredients and" in stdout and "steps" in stdout:
+                for line in stdout.split('\n'):
+                    if "ingredients and" in line and "steps" in line:
+                        print(f"   📋 {line.strip()}")
+                        break
+            
+            # Check for tool execution logs
+            if "Execution logs:" in stdout:
+                print(f"   ✅ Tool execution logs present")
+            
+            # Check for final answer format
+            if "Final answer:" in stdout:
+                print(f"   ✅ Final answer format confirmed")
+            
+            # Extract and display the actual recipe object from the output
+            print(f"\n   📋 RECIPE OBJECT EXTRACTION:")
+            if "Final answer:" in stdout:
+                # Find the final answer section and extract the recipe object
+                lines = stdout.split('\n')
+                in_final_answer = False
+                recipe_object = []
+                
+                for line in lines:
+                    if "Final answer:" in line:
+                        in_final_answer = True
+                        continue
+                    if in_final_answer and line.strip():
+                        recipe_object.append(line.strip())
+                    elif in_final_answer and not line.strip():
+                        break
+                
+                if recipe_object:
+                    print(f"   📋 Recipe Object Found:")
+                    for line in recipe_object[:10]:  # Show first 10 lines
+                        print(f"      {line}")
+                    if len(recipe_object) > 10:
+                        print(f"      ... ({len(recipe_object) - 10} more lines)")
+            
+            return True
+        else:
+            print(f"   ⚠️  Pipeline stages incomplete")
+            print(f"   Raw output preview:")
+            print(f"   {stdout[:300]}{'...' if len(stdout) > 300 else ''}")
+            return False
+    else:
+        if "timed out" in stderr:
+            print(f"   ⚠️  Test timed out (normal for complex operations)")
+        else:
+            print(f"   ❌ Test failed: {stderr}")
+        return False
+
 def run_validation_protocol(fast_mode=False):
     """Run the complete validation protocol"""
     print("🧪 AI Chef Assistant - Validation Protocol")
@@ -255,13 +350,14 @@ def run_validation_protocol(fast_mode=False):
     # Define which tests to run based on mode
     if fast_mode:
         tests = [
-            ("Individual Tool", test_individual_tool),
+            ("Full Pipeline - Basic", test_full_pipeline_basic),
         ]
     else:
         tests = [
             ("Help Documentation", test_help_documentation),
-            ("Individual Tool", test_individual_tool),
-            ("Dietary Restrictions", test_dietary_restrictions),
+            ("Full Pipeline - Basic", test_full_pipeline_basic),
+            ("Full Pipeline - Dietary", test_full_pipeline_dietary),
+            ("Full Pipeline - Comprehensive", test_full_pipeline_comprehensive),
             ("Error Handling", test_error_handling),
             ("Automated Tests", test_automated_tests),
         ]
