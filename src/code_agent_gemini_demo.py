@@ -40,9 +40,9 @@ import dotenv
 import os
 dotenv.load_dotenv()
 
-model_id="gemini-2.5-flash"
+model_id = os.getenv("MODEL_ID", "gemini-2.5-flash")
 model = OpenAIServerModel(model_id=model_id,
-                          api_base="https://generativelanguage.googleapis.com/v1beta/openai/",
+                          api_base=os.getenv("GPT_ENDPOINT", "https://generativelanguage.googleapis.com/v1beta/openai/"),
                           api_key=os.getenv("GEMINI_API_KEY"),
                           )
 agent = CodeAgent(
