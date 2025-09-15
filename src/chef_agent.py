@@ -135,7 +135,7 @@ def run_search(query, dietary_restrictions=None):
             restrictions_str = ', '.join(dietary_restrictions)
             search_prompt += f" with dietary restrictions: {restrictions_str}"
         
-        search_prompt += ". The tool returns a JSON string - use json.loads() to parse it, then extract the recipe title, URL, and description from the 'recipes' array. You MUST call final_answer() with the format: 'RECIPE_FOUND: [title] | URL: [url] | DESCRIPTION: [description]' or 'NO_RECIPES_FOUND: [error message]'. Do not stop until you call final_answer(). Use the exact query '{query}' - do not substitute it with something else."
+        search_prompt += ". The tool returns a JSON string - use json.loads() to parse it. If the JSON contains an 'error' field, return 'NO_RECIPES_FOUND: [error message]'. If it contains a 'recipes' array with results, extract the recipe title, URL, and description from the first recipe. You MUST call final_answer() with the format: 'RECIPE_FOUND: [title] | URL: [url] | DESCRIPTION: [description]' or 'NO_RECIPES_FOUND: [error message]'. Do not stop until you call final_answer(). Use the exact query '{query}' - do not substitute it with something else."
         
         result = agent.run(search_prompt)
         
