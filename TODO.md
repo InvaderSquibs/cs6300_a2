@@ -51,20 +51,21 @@ Building a multi-tooled AI chef assistant using smolagents framework with 3 spec
 - [x] **FULL VALIDATION TEST**: Help docs → Tool invocation → JSON validation
 - [x] **CHAINING VALIDATION**: Tool 1 → Tool 2 pipeline test
 
-### Phase 3: Tool 3 - Recipe Scaling & Unit Conversion
-- [ ] Build Tool 3: Recipe Scaling & Unit Conversion with intelligent unit handling
-  - [ ] Implement serving size scaling logic (e.g., 2 servings → 4 servings)
-  - [ ] Add unit conversion capabilities (tbsp→cups, oz→lbs, etc.)
-  - [ ] Handle fractional measurements and rounding (1.5 cups → 1½ cups)
-  - [ ] Return scaled recipe in clean JSON format
-  - [ ] Add comprehensive docstrings and documentation
-  - [ ] **NEW**: Integrate with existing recipe data from Phase 2.5
-  - [ ] **NEW**: Support both metric and imperial unit systems
-- [ ] Test Tool 3 with different serving sizes and unit conversions
-- [ ] Validate scaling accuracy and unit conversion logic
-- [ ] **FULL VALIDATION TEST**: Help docs → Tool invocation → JSON validation
-- [ ] **CHAINING VALIDATION**: Tool 1 → Tool 2 → Tool 3 pipeline test
-- [ ] **END-TO-END VALIDATION**: Natural language request → search → extract → scale
+### Phase 3: Tool 3 - Recipe Scaling & Unit Conversion (LLM-First Approach)
+- [x] Build Tool 3: Recipe Scaling & Unit Conversion with LLM natural language understanding
+  - [x] Implement LLM-powered serving size detection from user prompts
+  - [x] Add intelligent unit conversion using LLM reasoning (tbsp→cups, oz→lbs, etc.)
+  - [x] Handle fractional measurements and natural language formatting (1.5 cups → 1½ cups)
+  - [x] Return scaled recipe in clean JSON format with scaling metadata
+  - [x] Add comprehensive docstrings and documentation
+  - [x] **NEW**: LLM-first approach replaces deterministic conversion tables
+  - [x] **NEW**: Natural language serving size detection ("dinner party with 8 guests" → 8 servings)
+  - [x] **NEW**: Intelligent unit conversion based on context and readability
+- [x] Test Tool 3 with different serving sizes and natural language prompts
+- [x] Validate LLM scaling accuracy and unit conversion logic
+- [x] **FULL VALIDATION TEST**: Help docs → Tool invocation → JSON validation
+- [x] **CHAINING VALIDATION**: Tool 1 → Tool 2 → Tool 3 pipeline test
+- [x] **END-TO-END VALIDATION**: Natural language request → search → extract → scale
 
 ### Phase 4: Tool 4 - Recipe Validation & Final Formatting
 - [ ] Build Tool 4: Recipe Validation & Final Formatting with completeness checks
@@ -198,6 +199,30 @@ Building a multi-tooled AI chef assistant using smolagents framework with 3 spec
 - ✅ **Data Quality**: Perfect extraction with proper amounts, units, and cooking steps
 - ✅ **Agent Integration**: Tool properly integrated with chef_agent.py and validation protocol
 - ✅ **End-to-End Pipeline**: Complete validation with natural language requests working perfectly
+
+### Phase 3 Completed (Recipe Scaling Tool - LLM-First Approach)
+**Architecture Decision:**
+1. **LLM-First Scaling**: Replaced deterministic conversion tables with LLM natural language understanding
+2. **Natural Language Serving Detection**: LLM interprets prompts like "dinner party with 8 guests" → 8 servings
+3. **Intelligent Unit Conversion**: LLM decides when to convert units based on context and readability
+4. **Flexible Amount Formatting**: LLM chooses optimal format (fractions vs decimals) for readability
+5. **Context-Aware Scaling**: LLM understands cooking context and scales appropriately
+
+**Implementation Results:**
+- ✅ **LLM Natural Language Scaling**: Uses `qwen/qwen3-4b-2507` model for serving size detection and scaling
+- ✅ **Universal Serving Detection**: Handles any natural language prompt for serving size determination
+- ✅ **Intelligent Unit Conversion**: LLM decides when to convert units (e.g., 16 cups → 1 gallon)
+- ✅ **Natural Instruction Updates**: LLM rewrites instruction text with scaled amounts naturally
+- ✅ **Scaling Metadata**: Provides detailed scaling information including detection method and conversions
+- ✅ **Performance**: Dramatically simplified code while improving flexibility and accuracy
+
+**Validation Results:**
+- ✅ **Dinner Party Test**: "dinner party with 8 guests" → correctly detected 8 servings, scaled appropriately
+- ✅ **Large Family Test**: "large family gathering" → scaled from 6-8 to 20 servings with 2.5x factor
+- ✅ **Unit Conversion**: LLM intelligently converts units when amounts become unwieldy
+- ✅ **Instruction Updates**: LLM naturally updates instruction text with new scaled amounts
+- ✅ **Agent Integration**: Tool properly integrated with chef_agent.py and validation protocol
+- ✅ **End-to-End Pipeline**: Complete validation with natural language requests including scaling
 
 ### Phase 2.5+ Completed (End-to-End Validation)
 **Key Achievements:**

@@ -22,6 +22,7 @@ import json
 # Import our custom tools
 from tools.recipe_search import RecipeSearchTool
 from tools.recipe_extraction_llm import RecipeExtractionLLMTool
+from tools.recipe_scaling_llm import RecipeScalingLLMTool
 
 # Load environment variables
 dotenv.load_dotenv()
@@ -38,12 +39,10 @@ def create_chef_agent():
     # Initialize tools
     recipe_search_tool = RecipeSearchTool()
     recipe_extraction_tool = RecipeExtractionLLMTool()
-    
-    # TODO: Add more tools as we build them
-    # recipe_scaling_tool = RecipeScalingTool()
+    recipe_scaling_tool = RecipeScalingLLMTool()
     # recipe_validation_tool = RecipeValidationTool()
     
-    tools = [recipe_search_tool, recipe_extraction_tool]
+    tools = [recipe_search_tool, recipe_extraction_tool, recipe_scaling_tool]
     
     # Configure the model
     model = OpenAIServerModel(
@@ -97,7 +96,7 @@ def show_help():
         # Create tools directly instead of through agent
         recipe_search_tool = RecipeSearchTool()
         recipe_extraction_tool = RecipeExtractionLLMTool()
-        tools = [recipe_search_tool, recipe_extraction_tool]
+        tools = [recipe_search_tool, recipe_extraction_tool, recipe_scaling_tool]
         
         for tool in tools:
             print(f"🔧 {tool.name}")
@@ -587,6 +586,12 @@ if data['success'] and data['recipe']['ingredients'] and data['recipe']['instruc
                     for j, inst in enumerate(final_result['instructions'], 1):
                         print(f"  {j}. {inst}")
                     
+                    # Step 4: Scale the recipe if the user prompt indicates a specific serving size
+                    print(f"\n🔍 Step {i+3}: Checking for scaling requirements...")
+                    scaling_result = scale_recipe_if_needed(final_result, user_prompt, agent)
+                    if scaling_result:
+                        return scaling_result
+                    
                     return final_result
                 else:
                     print(f"❌ Recipe {i+1} failed: Agent extraction unsuccessful")
@@ -676,6 +681,109 @@ def run_natural_language_request(user_prompt, dietary_restrictions=None):
         print(f"❌ Natural language request failed: {e}")
         import traceback
         traceback.print_exc()
+
+
+def scale_recipe_if_needed(recipe_data, user_prompt, agent):
+    """
+    Check if the user prompt indicates a need for scaling and scale the recipe if needed.
+    
+    Args:
+        recipe_data (dict): The extracted recipe data
+        user_prompt (str): The original user prompt
+        agent: The agent instance
+        
+    Returns:
+        dict: Scaled recipe data if scaling was needed, None otherwise
+    """
+    # Check if the user prompt indicates a specific serving size
+    serving_indicators = [
+        'for', 'people', 'guests', 'servings', 'family', 'party', 'gathering',
+        'dinner party', 'large family', 'small', 'couple', 'just me'
+    ]
+    
+    prompt_lower = user_prompt.lower()
+    needs_scaling = any(indicator in prompt_lower for indicator in serving_indicators)
+    
+    if not needs_scaling:
+        print("   No scaling needed - user prompt doesn't indicate specific serving size")
+        return None
+    
+    print("   User prompt indicates scaling needed - scaling recipe...")
+    
+    try:
+        # Convert recipe data to JSON string for the scaling tool
+        recipe_json = json.dumps({
+            "success": True,
+            "recipe": recipe_data
+        })
+        
+        # Use the agent to scale the recipe
+        scaling_prompt = f"""Scale this recipe based on the user's request: "{user_prompt}"
+
+Recipe data: {recipe_json}
+
+IMPORTANT: The recipe_scaling_llm tool expects a JSON STRING, not a dictionary.
+
+Follow these steps exactly:
+1. Call recipe_scaling_llm(recipe_data=recipe_json, target_servings='auto', user_prompt='{user_prompt}')
+2. The result is a JSON STRING - you need to parse it with json.loads()
+3. Parse the result: import json; result_data = json.loads(scaled_result)
+4. Check if result_data['success'] is True and return the scaled recipe data
+5. If scaling is successful, call final_answer(result_data) with the complete scaling result
+
+You MUST call final_answer() with the scaled recipe data or error message. Do not stop until you call final_answer()."""
+        
+        result = agent.run(scaling_prompt)
+        
+        # Parse the scaling result
+        if isinstance(result, dict) and result.get('success'):
+            print("   ✅ Recipe scaled successfully!")
+            return result
+        else:
+            print("   ❌ Recipe scaling failed")
+            return None
+            
+    except Exception as e:
+        print(f"   ❌ Recipe scaling failed: {e}")
+        return None
+
+
+def run_scaling(recipe_json, target_servings, user_prompt=None):
+    """
+    Run recipe scaling to target serving size.
+    
+    Args:
+        recipe_json (str): JSON string containing recipe data
+        target_servings (str): Target number of servings
+        user_prompt (str): Original user prompt for serving size detection
+    """
+    try:
+        # Create agent
+        agent = create_chef_agent()
+        
+        # Build the scaling prompt
+        scaling_prompt = f"""Scale this recipe to {target_servings} servings:
+
+Recipe data: {recipe_json}
+
+IMPORTANT: The recipe_scaling tool expects a JSON STRING, not a dictionary.
+
+Follow these steps exactly:
+1. Convert the recipe data to a JSON string using: import json; recipe_json_string = json.dumps(recipe_data)
+2. Call recipe_scaling(recipe_data=recipe_json_string, target_servings='{target_servings}')
+3. The result is already a dictionary - no need to parse with json.loads()
+4. Check if result['success'] is True and return the scaled recipe data
+
+You MUST call final_answer() with the scaled recipe data or error message. Do not stop until you call final_answer()."""
+        
+        result = agent.run(scaling_prompt)
+        
+        print("📋 Scaling Result:")
+        print("=" * 20)
+        print(result)
+        
+    except Exception as e:
+        print(f"❌ Scaling failed: {e}")
 
 
 def main():
