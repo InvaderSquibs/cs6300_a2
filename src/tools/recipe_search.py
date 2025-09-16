@@ -252,7 +252,7 @@ class RecipeSearchTool(Tool):
                 # Filter out known problematic sites and prioritize working ones
                 filtered_results = []
                 blocked_domains = ['foodnetwork.com']  # Sites that consistently block our requests
-                roundup_keywords = ['roundup', 'collection', 'best', 'top', 'list', 'guide', 'favorite', 'delicious', 'scrumptious', 'easy', 'simple']  # Avoid recipe roundup pages
+                roundup_keywords = ['roundup', 'collection', 'list', 'guide', 'favorite']  # Avoid recipe roundup pages (removed 'best', 'easy', 'simple' as they're common in recipe titles)
                 
                 for result in results:
                     url = result.get('href', '')
@@ -270,8 +270,11 @@ class RecipeSearchTool(Tool):
                     if any(domain in url for domain in ['allrecipes.com', 'epicurious.com', 'bonappetit.com', 'tasty.co', 'delish.com']):
                         filtered_results.append(result)
                     else:
-                        # Include other recipe sites as fallback
-                        if any(keyword in url.lower() for keyword in ['recipe', 'cooking', 'food']):
+                        # Include other recipe sites as fallback - be more permissive
+                        if any(keyword in url.lower() for keyword in ['recipe', 'cooking', 'food', 'vegan', 'baking', 'kitchen']):
+                            filtered_results.append(result)
+                        # Also include sites that look like recipe sites based on domain patterns
+                        elif any(pattern in url.lower() for pattern in ['.com/', 'blog', 'cook', 'bake']):
                             filtered_results.append(result)
                 
                 # Take up to 5 results

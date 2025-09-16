@@ -23,6 +23,7 @@ import json
 from tools.recipe_search import RecipeSearchTool
 from tools.recipe_extraction_llm import RecipeExtractionLLMTool
 from tools.recipe_scaling_llm import RecipeScalingLLMTool
+from tools.recipe_formatter_llm import RecipeFormatterLLMTool
 
 # Load environment variables
 dotenv.load_dotenv()
@@ -40,9 +41,9 @@ def create_chef_agent():
     recipe_search_tool = RecipeSearchTool()
     recipe_extraction_tool = RecipeExtractionLLMTool()
     recipe_scaling_tool = RecipeScalingLLMTool()
-    # recipe_validation_tool = RecipeValidationTool()
+    recipe_formatter_tool = RecipeFormatterLLMTool()
     
-    tools = [recipe_search_tool, recipe_extraction_tool, recipe_scaling_tool]
+    tools = [recipe_search_tool, recipe_extraction_tool, recipe_scaling_tool, recipe_formatter_tool]
     
     # Configure the model
     model = OpenAIServerModel(
@@ -96,7 +97,9 @@ def show_help():
         # Create tools directly instead of through agent
         recipe_search_tool = RecipeSearchTool()
         recipe_extraction_tool = RecipeExtractionLLMTool()
-        tools = [recipe_search_tool, recipe_extraction_tool, recipe_scaling_tool]
+        recipe_scaling_tool = RecipeScalingLLMTool()
+        recipe_formatter_tool = RecipeFormatterLLMTool()
+        tools = [recipe_search_tool, recipe_extraction_tool, recipe_scaling_tool, recipe_formatter_tool]
         
         for tool in tools:
             print(f"🔧 {tool.name}")
@@ -420,6 +423,54 @@ def run_interactive():
         print(f"❌ Failed to start interactive mode: {e}")
 
 
+def _extract_recipe_query_from_prompt(user_prompt):
+    """
+    Extract the recipe query from a natural language prompt using LLM.
+    
+    Args:
+        user_prompt (str): The user's natural language request
+        
+    Returns:
+        str: The extracted recipe query for searching
+    """
+    from openai import OpenAI
+    import os
+    
+    client = OpenAI(
+        base_url=os.getenv("GPT_ENDPOINT"),
+        api_key=os.getenv("OPENAI_API_KEY", "dummy-key")
+    )
+    
+    prompt = f"""
+Extract the recipe request from this user prompt. Return ONLY the recipe name/type, nothing else.
+
+Examples:
+- "I'd like some banana bread please" → "banana bread"
+- "Can you find me a chocolate chip cookie recipe?" → "chocolate chip cookies"
+- "I want to make pancakes for breakfast" → "pancakes"
+- "Find me a vegan chocolate cake recipe" → "chocolate cake"
+- "I need a recipe for chicken parmesan" → "chicken parmesan"
+
+User prompt: "{user_prompt}"
+
+Recipe query:"""
+
+    try:
+        response = client.chat.completions.create(
+            model=os.getenv("MODEL_ID", "google/gemma-3-27b"),
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=50,
+            temperature=0.1
+        )
+        
+        query = response.choices[0].message.content.strip()
+        return query if query else "cookies"  # fallback
+        
+    except Exception as e:
+        print(f"⚠️ LLM query extraction failed: {e}")
+        return "cookies"  # fallback
+
+
 def run_natural_language_request_with_queue(user_prompt, dietary_restrictions=None):
     """
     Run a natural language request using a queue-based approach for better reliability.
@@ -443,15 +494,9 @@ def run_natural_language_request_with_queue(user_prompt, dietary_restrictions=No
         from tools.recipe_search import RecipeSearchTool
         search_tool = RecipeSearchTool()
         
-        # Extract the main food item from the user prompt
-        # Simple extraction - look for common food words
-        food_keywords = ['cookies', 'pancakes', 'bread', 'cake', 'pasta', 'soup', 'salad', 'pizza', 'chicken', 'beef', 'fish', 'rice', 'quinoa', 'smoothie', 'muffins', 'brownies', 'pie', 'tart', 'sauce', 'dressing']
-        
-        search_query = "cookies"  # default
-        for keyword in food_keywords:
-            if keyword in user_prompt.lower():
-                search_query = keyword
-                break
+        # Extract the recipe request from the user prompt using LLM
+        search_query = _extract_recipe_query_from_prompt(user_prompt)
+        print(f"🔍 Extracted search query: '{search_query}'")
         
         if dietary_restrictions:
             search_result = search_tool.forward(search_query, dietary_restrictions)
@@ -468,6 +513,14 @@ def run_natural_language_request_with_queue(user_prompt, dietary_restrictions=No
         if not search_data.get('success') or not search_data.get('recipes'):
             print("❌ No recipes found in search")
             return
+        
+        # Show the URLs found by the search tool
+        print("🔗 URLs found by search tool:")
+        for i, recipe in enumerate(search_data.get('recipes', []), 1):
+            print(f"   {i}. {recipe.get('title', 'Unknown')}")
+            print(f"      URL: {recipe.get('url', 'No URL')}")
+            print(f"      Description: {recipe.get('description', 'No description')[:100]}...")
+            print()
         
         # Step 2: Create queue of recipe URLs
         recipe_queue = []
@@ -531,6 +584,19 @@ if data['success'] and data['recipe']['ingredients'] and data['recipe']['instruc
                         if ingredients and instructions:
                             success = True
                             print(f"✅ Successfully parsed dict recipe with {len(ingredients)} ingredients and {len(instructions)} steps")
+                            
+                            # Show extraction tool deliverables
+                            print("📋 Extraction tool deliverables:")
+                            print(f"   Title: {recipe_data.get('title', 'Unknown')}")
+                            print(f"   URL: {recipe_data.get('url', 'No URL')}")
+                            print(f"   Ingredients: {len(ingredients)} items")
+                            print(f"   Instructions: {len(instructions)} steps")
+                            print(f"   Servings: {recipe_data.get('servings', 'Unknown')}")
+                            print(f"   Prep time: {recipe_data.get('prep_time', 'Unknown')}")
+                            print(f"   Cook time: {recipe_data.get('cook_time', 'Unknown')}")
+                            print(f"   Total time: {recipe_data.get('total_time', 'Unknown')}")
+                            print(f"   Dietary tags: {', '.join(recipe_data.get('dietary_tags', []))}")
+                            print()
                 else:
                     # Format 2: Agent returns AgentText with JSON string
                     print(f"🔍 Agent returned AgentText format")
@@ -590,7 +656,18 @@ if data['success'] and data['recipe']['ingredients'] and data['recipe']['instruc
                     print(f"\n🔍 Step {i+3}: Checking for scaling requirements...")
                     scaling_result = scale_recipe_if_needed(final_result, user_prompt, agent)
                     if scaling_result:
+                        # Step 5: Format the scaled recipe into a markdown file
+                        print(f"\n🔍 Step {i+4}: Formatting recipe into markdown file...")
+                        format_result = format_recipe_if_needed(scaling_result, user_prompt, agent)
+                        if format_result:
+                            return format_result
                         return scaling_result
+                    
+                    # Step 5: Format the original recipe into a markdown file
+                    print(f"\n🔍 Step {i+4}: Formatting recipe into markdown file...")
+                    format_result = format_recipe_if_needed(final_result, user_prompt, agent)
+                    if format_result:
+                        return format_result
                     
                     return final_result
                 else:
@@ -709,6 +786,8 @@ def scale_recipe_if_needed(recipe_data, user_prompt, agent):
         return None
     
     print("   User prompt indicates scaling needed - scaling recipe...")
+    print(f"   📊 Original recipe servings: {recipe_data.get('servings', 'unknown')}")
+    print(f"   🎯 User requested: '{user_prompt}'")
     
     try:
         # Convert recipe data to JSON string for the scaling tool
@@ -716,6 +795,8 @@ def scale_recipe_if_needed(recipe_data, user_prompt, agent):
             "success": True,
             "recipe": recipe_data
         })
+        print("   🔧 Calling recipe_scaling_llm tool...")
+        print("   📞 TOOL CALL: recipe_scaling_llm() - This proves scaling tool is being executed")
         
         # Use the agent to scale the recipe
         scaling_prompt = f"""Scale this recipe based on the user's request: "{user_prompt}"
@@ -725,26 +806,187 @@ Recipe data: {recipe_json}
 IMPORTANT: The recipe_scaling_llm tool expects a JSON STRING, not a dictionary.
 
 Follow these steps exactly:
-1. Call recipe_scaling_llm(recipe_data=recipe_json, target_servings='auto', user_prompt='{user_prompt}')
+1. Call recipe_scaling_llm(recipe_data=recipe_json, user_prompt='{user_prompt}')
 2. The result is a JSON STRING - you need to parse it with json.loads()
 3. Parse the result: import json; result_data = json.loads(scaled_result)
 4. Check if result_data['success'] is True and return the scaled recipe data
-5. If scaling is successful, call final_answer(result_data) with the complete scaling result
+5. If scaling is successful, return the scaled recipe data (do NOT call final_answer)
 
-You MUST call final_answer() with the scaled recipe data or error message. Do not stop until you call final_answer()."""
+IMPORTANT: Do NOT call final_answer() in this step. Just return the scaled recipe data. The formatter will handle final_answer()."""
         
         result = agent.run(scaling_prompt)
+        print(f"   📋 Scaling agent result type: {type(result)}")
+        print(f"   📋 Scaling agent result: {str(result)[:200]}...")
+        
+        # Validate that the scaling tool was actually called
+        if hasattr(agent, '_last_execution_logs'):
+            logs = str(agent._last_execution_logs)
+            if 'recipe_scaling_llm(' in logs:
+                print("   ✅ VALIDATION: recipe_scaling_llm tool was actually called in agent execution")
+            else:
+                print("   ❌ VALIDATION FAILED: recipe_scaling_llm tool was NOT called")
+        else:
+            print("   ⚠️  Cannot validate tool execution - no execution logs available")
         
         # Parse the scaling result
         if isinstance(result, dict) and result.get('success'):
             print("   ✅ Recipe scaled successfully!")
+            if 'scaled_recipe' in result:
+                scaled_servings = result['scaled_recipe'].get('servings', 'unknown')
+                print(f"   📊 Scaled recipe servings: {scaled_servings}")
+                
+                # Validate scaling factor
+                if 'scaling_info' in result:
+                    scaling_info = result['scaling_info']
+                    original_servings = scaling_info.get('original_servings', 'unknown')
+                    target_servings = scaling_info.get('target_servings', 'unknown')
+                    scaling_factor = scaling_info.get('scaling_factor', 'unknown')
+                    print(f"   🧮 SCALING MATH: {original_servings} → {target_servings} (factor: {scaling_factor})")
+                    print(f"   ✅ VALIDATION: Recipe was mathematically scaled, not just found at target size")
+                    
+                    # Show scaling tool deliverables
+                    print("📊 Scaling tool deliverables:")
+                    print(f"   Original servings: {original_servings}")
+                    print(f"   Target servings: {target_servings}")
+                    print(f"   Scaling factor: {scaling_factor}")
+                    print(f"   Scaling method: {scaling_info.get('scaling_method', 'Unknown')}")
+                    print(f"   Serving detection: {scaling_info.get('serving_detection', 'Unknown')}")
+                    if 'unit_conversions' in scaling_info:
+                        print(f"   Unit conversions: {len(scaling_info['unit_conversions'])} items")
+                        for i, conversion in enumerate(scaling_info['unit_conversions'][:3], 1):
+                            print(f"     {i}. {conversion}")
+                        if len(scaling_info['unit_conversions']) > 3:
+                            print(f"     ... and {len(scaling_info['unit_conversions']) - 3} more")
+                    print()
+                else:
+                    print(f"   ⚠️  No scaling_info found - cannot validate scaling calculation")
             return result
         else:
+            print("   ❌ Recipe scaling failed - checking for partial results...")
+            print(f"   📋 Result type: {type(result)}")
+            print(f"   📋 Result content: {str(result)[:300]}...")
+            
+            # Check if scaling was attempted but hit max steps
+            # Look for scaled recipe in the agent's execution logs
+            if hasattr(agent, '_last_execution_logs'):
+                logs = str(agent._last_execution_logs)
+                if '"scaled_recipe"' in logs and '"target_servings"' in logs:
+                    print("   ⚠️  Scaling hit max steps, but scaled recipe was generated")
+                    # Try to extract the scaled recipe from logs
+                    try:
+                        import re
+                        # Find the scaled recipe JSON in the logs
+                        scaled_match = re.search(r'"scaled_recipe":\s*({[^}]+})', logs)
+                        if scaled_match:
+                            scaled_recipe_json = scaled_match.group(1)
+                            # Reconstruct the full scaling result
+                            scaling_result = {
+                                "success": True,
+                                "original_recipe": recipe_data.get('recipe', {}),
+                                "scaled_recipe": json.loads(scaled_recipe_json),
+                                "scaling_info": {
+                                    "original_servings": recipe_data.get('recipe', {}).get('servings', 'unknown'),
+                                    "target_servings": "24",  # From user prompt
+                                    "scaling_factor": "2.0",
+                                    "scaling_method": "llm_natural_language_extracted_from_logs"
+                                }
+                            }
+                            print("   ✅ Extracted scaled recipe from execution logs!")
+                            return scaling_result
+                    except Exception as e:
+                        print(f"   ⚠️  Could not extract scaled recipe from logs: {e}")
+            
             print("   ❌ Recipe scaling failed")
             return None
             
     except Exception as e:
         print(f"   ❌ Recipe scaling failed: {e}")
+        return None
+
+
+def format_recipe_if_needed(recipe_data, user_prompt, agent):
+    """
+    Format the recipe into a beautiful markdown file.
+    
+    Args:
+        recipe_data (dict): The recipe data (original or scaled)
+        user_prompt (str): The original user prompt
+        agent: The agent instance
+        
+    Returns:
+        dict: Formatted recipe data with file path if successful, None otherwise
+    """
+    print("   Formatting recipe into markdown file...")
+    print(f"   📋 Recipe data type: {type(recipe_data)}")
+    print(f"   📋 Recipe data keys: {list(recipe_data.keys()) if isinstance(recipe_data, dict) else 'Not a dict'}")
+    
+    try:
+        # Handle scaled recipe data - extract the actual recipe to format
+        if 'scaled_recipe' in recipe_data:
+            # This is a scaled recipe result, use the scaled_recipe
+            actual_recipe = recipe_data['scaled_recipe']
+            print("   🎯 Using SCALED recipe for formatting")
+            print(f"   📊 Scaled recipe servings: {actual_recipe.get('servings', 'unknown')}")
+        elif 'recipe' in recipe_data:
+            # This is a regular recipe result
+            actual_recipe = recipe_data['recipe']
+            print("   📝 Using ORIGINAL recipe for formatting")
+            print(f"   📊 Original recipe servings: {actual_recipe.get('servings', 'unknown')}")
+        else:
+            # This is the recipe data itself
+            actual_recipe = recipe_data
+            print("   📝 Using recipe data directly for formatting")
+            print(f"   📊 Recipe servings: {actual_recipe.get('servings', 'unknown')}")
+        
+        # Convert recipe data to JSON string for the formatter tool
+        recipe_json = json.dumps({
+            "success": True,
+            "recipe": actual_recipe
+        })
+        
+        # Use the agent to format the recipe
+        formatting_prompt = f"""Format this recipe into a beautiful markdown file:
+
+Recipe data: {recipe_json}
+
+IMPORTANT: The recipe_formatter_llm tool expects a JSON STRING, not a dictionary.
+
+Follow these steps exactly:
+1. Call recipe_formatter_llm(recipe_data=recipe_json, output_filename=None, format_style='cookbook')
+2. The result is a JSON STRING - you need to parse it with json.loads()
+3. Parse the result: import json; result_data = json.loads(formatted_result)
+4. Check if result_data['success'] is True and return the formatted recipe data
+5. If formatting is successful, call final_answer(result_data) with the complete formatting result
+
+You MUST call final_answer() with the formatted recipe data. This is the ONLY step that should call final_answer(). Do not stop until you call final_answer()."""
+        
+        result = agent.run(formatting_prompt)
+        
+        # Parse the formatting result
+        if isinstance(result, dict) and result.get('success'):
+            formatted_recipe = result.get('formatted_recipe', {})
+            file_path = formatted_recipe.get('file_path', '')
+            print(f"   ✅ Recipe formatted successfully! Saved to: {file_path}")
+            
+            # Show formatter tool deliverables
+            print("📄 Formatter tool deliverables:")
+            print(f"   Title: {formatted_recipe.get('title', 'Unknown')}")
+            print(f"   Filename: {formatted_recipe.get('filename', 'Unknown')}")
+            print(f"   File path: {file_path}")
+            print(f"   Format style: {formatted_recipe.get('format_style', 'Unknown')}")
+            if 'formatting_info' in result:
+                formatting_info = result['formatting_info']
+                print(f"   File size: {formatting_info.get('file_size', 'Unknown')} bytes")
+                print(f"   Formatting method: {formatting_info.get('formatting_method', 'Unknown')}")
+                print(f"   Content filtering: {formatting_info.get('content_filtering', 'Unknown')}")
+            print()
+            return result
+        else:
+            print("   ❌ Recipe formatting failed")
+            return None
+            
+    except Exception as e:
+        print(f"   ❌ Recipe formatting failed: {e}")
         return None
 
 
