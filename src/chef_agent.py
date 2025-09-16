@@ -21,7 +21,7 @@ import json
 
 # Import our custom tools
 from tools.recipe_search import RecipeSearchTool
-from tools.recipe_extraction import RecipeExtractionTool
+from tools.recipe_extraction_llm import RecipeExtractionLLMTool
 
 # Load environment variables
 dotenv.load_dotenv()
@@ -37,7 +37,7 @@ def create_chef_agent():
     
     # Initialize tools
     recipe_search_tool = RecipeSearchTool()
-    recipe_extraction_tool = RecipeExtractionTool()
+    recipe_extraction_tool = RecipeExtractionLLMTool()
     
     # TODO: Add more tools as we build them
     # recipe_scaling_tool = RecipeScalingTool()
@@ -96,7 +96,7 @@ def show_help():
     try:
         # Create tools directly instead of through agent
         recipe_search_tool = RecipeSearchTool()
-        recipe_extraction_tool = RecipeExtractionTool()
+        recipe_extraction_tool = RecipeExtractionLLMTool()
         tools = [recipe_search_tool, recipe_extraction_tool]
         
         for tool in tools:
@@ -345,8 +345,7 @@ def run_end_to_end_test_with_tool_outputs(dietary_restrictions=None):
         print("\n🔍 TOOL 2: Recipe Extraction")
         print("-" * 30)
         
-        from tools.recipe_extraction import RecipeExtractionTool
-        extraction_tool = RecipeExtractionTool()
+        extraction_tool = RecipeExtractionLLMTool()
         
         extraction_result = extraction_tool.forward(recipe_url)
         
@@ -493,7 +492,22 @@ def run_natural_language_request_with_queue(user_prompt, dietary_restrictions=No
             print(f"   URL: {recipe['url']}")
             
             # Use the agent to extract and format the recipe
-            extraction_prompt = f"Extract recipe from this URL: {recipe['url']}. Use the recipe_extraction tool, parse the JSON response, and call final_answer() with the recipe data if successful."
+            extraction_prompt = f"""Extract recipe from this URL: {recipe['url']}
+
+IMPORTANT: The recipe_extraction_llm tool returns a JSON STRING, not a dictionary.
+
+Follow these steps exactly:
+1. Call recipe_extraction_llm(url='{recipe['url']}') and store the result in a variable
+2. Parse the JSON string using: import json; data = json.loads(result)
+3. Check if data['success'] is True and data['recipe']['ingredients'] and data['recipe']['instructions'] exist
+4. If successful, call final_answer(data) with the complete data
+5. If not successful, do not call final_answer()
+
+Example:
+result = recipe_extraction_llm(url='{recipe['url']}')
+data = json.loads(result)
+if data['success'] and data['recipe']['ingredients'] and data['recipe']['instructions']:
+    final_answer(data)"""
             
             try:
                 result = agent.run(extraction_prompt)
@@ -678,7 +692,7 @@ def main():
         elif command == 'test':
             run_test()
         elif command == 'e2e':
-            run_end_to_end_test()  # No dietary restrictions for basic e2e test
+            run_natural_language_request_with_queue("I'd like some pancakes please")  # No dietary restrictions for basic e2e test
         elif command == 'tools':
             run_end_to_end_test_with_tool_outputs(['vegan'])  # Default to vegan for tools test
         else:
@@ -717,7 +731,7 @@ def main():
             if command == 'e2e' and diet_flag == '--diet':
                 # Parse dietary restrictions (comma-separated)
                 restrictions_list = [r.strip().lower() for r in diet_restrictions.split(',')]
-                run_end_to_end_test(restrictions_list)
+                run_natural_language_request_with_queue("I'd like some pancakes please", restrictions_list)
             else:
                 print(f"❌ Unknown command or flag: {command} {diet_flag}")
                 print("Use 'python3.11 chef_agent.py help' for usage information")
@@ -734,7 +748,7 @@ def main():
         elif command == 'e2e' and diet_flag == '--diet':
             # Parse dietary restrictions (comma-separated)
             restrictions_list = [r.strip().lower() for r in diet_restrictions.split(',')]
-            run_end_to_end_test(restrictions_list)
+            run_natural_language_request_with_queue("I'd like some pancakes please", restrictions_list)
         elif command == 'tools' and diet_flag == '--diet':
             # Parse dietary restrictions (comma-separated)
             restrictions_list = [r.strip().lower() for r in diet_restrictions.split(',')]

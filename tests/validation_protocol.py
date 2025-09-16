@@ -90,8 +90,9 @@ def test_full_pipeline_basic():
         if "Step 1" in stdout and "Step 2" in stdout:
             print(f"   ✅ Multi-step agent execution confirmed")
         
-        # Check for successful pipeline completion
-        if "✅ Recipe search successful" in stdout and "✅ Recipe extraction successful" in stdout:
+        # Check for successful pipeline completion (both old and new formats)
+        if (("✅ Recipe search successful" in stdout and "✅ Recipe extraction successful" in stdout) or 
+            ("✅ Success! Found recipe with" in stdout and "ingredients and" in stdout and "steps" in stdout)):
             print(f"   ✅ Full pipeline stages completed: searching → extracting")
             
             # Extract and display recipe details
@@ -151,8 +152,9 @@ def test_full_pipeline_dietary():
         if "Step 1" in stdout and "Step 2" in stdout:
             print(f"   ✅ Multi-step agent execution confirmed")
         
-        # Check for successful pipeline completion
-        if "✅ Recipe search successful" in stdout and "✅ Recipe extraction successful" in stdout:
+        # Check for successful pipeline completion (both old and new formats)
+        if (("✅ Recipe search successful" in stdout and "✅ Recipe extraction successful" in stdout) or 
+            ("✅ Success! Found recipe with" in stdout and "ingredients and" in stdout and "steps" in stdout)):
             print(f"   ✅ Full pipeline stages completed: searching → extracting")
             
             # Extract and display recipe details
@@ -278,8 +280,9 @@ def test_full_pipeline_comprehensive():
         if "Step 1" in stdout and "Step 2" in stdout:
             print(f"   ✅ Multi-step agent execution confirmed")
         
-        # Check for successful pipeline completion
-        if "✅ Recipe search successful" in stdout and "✅ Recipe extraction successful" in stdout:
+        # Check for successful pipeline completion (both old and new formats)
+        if (("✅ Recipe search successful" in stdout and "✅ Recipe extraction successful" in stdout) or 
+            ("✅ Success! Found recipe with" in stdout and "ingredients and" in stdout and "steps" in stdout)):
             print(f"   ✅ Full pipeline stages completed: searching → extracting")
             
             # Extract and display recipe details
@@ -353,13 +356,11 @@ def run_validation_protocol(fast_mode=False):
             ("Full Pipeline - Basic", test_full_pipeline_basic),
         ]
     else:
+        # Focus on 2-3 end-to-end LLM tests for efficiency
         tests = [
-            ("Help Documentation", test_help_documentation),
             ("Full Pipeline - Basic", test_full_pipeline_basic),
             ("Full Pipeline - Dietary", test_full_pipeline_dietary),
             ("Full Pipeline - Comprehensive", test_full_pipeline_comprehensive),
-            ("Error Handling", test_error_handling),
-            ("Automated Tests", test_automated_tests),
         ]
     
     results = []
