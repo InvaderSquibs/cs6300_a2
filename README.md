@@ -4,10 +4,12 @@ A multi-tooled AI agent that helps with recipe curation, scaling, and formatting
 
 ## Features
 
-- **🔍 Recipe Search**: Find recipes with dietary restrictions using DuckDuckGo search
-- **📄 Recipe Extraction**: Extract detailed recipe information from any website using LLM natural language understanding
-- **⚖️ Recipe Scaling**: Intelligently scale recipes for different serving sizes with unit conversions
-- **📝 Recipe Formatting**: Generate beautiful markdown recipe files in cookbook style
+- **🔍 Recipe Search**: Find recipes with dietary restrictions using DuckDuckGo search with detailed URL listings
+- **📄 Recipe Extraction**: Extract detailed recipe information from any website using LLM natural language understanding with ingredient/step counts
+- **⚖️ Recipe Scaling**: Intelligently scale recipes for different serving sizes with unit conversions and scaling factor validation
+- **📝 Recipe Formatting**: Generate beautiful markdown recipe files in cookbook style with file size and formatting details
+- **🔍 Enhanced Logging**: Detailed tool deliverables showing URLs found, ingredient counts, scaling math, and file generation
+- **📊 Telemetry Ready**: Built for easy integration with Phoenix, Opik, or LangWatch for advanced monitoring
 
 ## Installation
 
@@ -36,7 +38,94 @@ python3.11 src/chef_agent.py "I'd like some pancakes please" --restrictions vega
 
 # With scaling for specific serving size
 python3.11 src/chef_agent.py "I'd like some vegan pancakes for a family gathering with 12 people" --restrictions vegan
+
+# Example with detailed tool deliverables
+python3.11 src/chef_agent.py "I'd like to make chocolate chip cookies for 8 people" --restrictions "vegan"
 ```
+
+### Enhanced Output
+
+The assistant now provides detailed deliverables from each tool:
+
+- **🔗 Search Tool**: Shows all URLs found with titles and descriptions
+- **📋 Extraction Tool**: Displays ingredient count, step count, timing, and dietary tags
+- **📊 Scaling Tool**: Shows original→target servings, scaling factor, and unit conversions
+- **📄 Formatter Tool**: Displays filename, file path, file size, and formatting method
+
+## Telemetry & Monitoring
+
+The AI Chef Assistant is built with OpenTelemetry support for advanced monitoring and debugging:
+
+### Phoenix Integration (Recommended)
+
+**1. Install Dependencies:**
+```bash
+pip install 'smolagents[telemetry]' opentelemetry-sdk opentelemetry-exporter-otlp openinference-instrumentation-smolagents
+```
+
+**2. Start Phoenix Server:**
+```bash
+python -m phoenix.server.main serve
+```
+Phoenix will be available at: http://localhost:6006
+
+**3. Enable Telemetry:**
+```bash
+# Option 1: Environment variable
+export ENABLE_TELEMETRY=true
+python3.11 src/chef_agent.py "I'd like some pancakes"
+
+# Option 2: Direct import
+python3.11 -c "from src.telemetry_config import enable_telemetry; enable_telemetry(); import src.chef_agent"
+```
+
+**4. View Metrics:**
+Open http://localhost:6006 in your browser to see:
+
+#### **📊 Tracked Metrics:**
+
+**🔍 Search Tool Metrics:**
+- `search.query`: Search query used
+- `search.results_count`: Number of recipes found
+- `search.dietary_restrictions`: Applied dietary filters
+- `search.filtered_count`: Recipes after filtering
+- `search.success_rate`: Search success percentage
+
+**📄 Extraction Tool Metrics:**
+- `extraction.url`: Recipe URL being extracted
+- `extraction.ingredients_count`: Number of ingredients found
+- `extraction.instructions_count`: Number of instruction steps
+- `extraction.servings`: Recipe serving size
+- `extraction.prep_time`: Preparation time
+- `extraction.cook_time`: Cooking time
+- `extraction.dietary_tags`: Detected dietary tags
+- `extraction.success_rate`: Extraction success percentage
+
+**⚖️ Scaling Tool Metrics:**
+- `scaling.original_servings`: Original recipe servings
+- `scaling.target_servings`: Target servings requested
+- `scaling.scaling_factor`: Mathematical scaling factor (e.g., 2.0 for 4→8)
+- `scaling.scaling_method`: Method used (proportional, time_adjusted)
+- `scaling.unit_conversions_count`: Number of unit conversions performed
+- `scaling.success_rate`: Scaling success percentage
+
+**📝 Formatter Tool Metrics:**
+- `formatter.recipe_title`: Recipe title being formatted
+- `formatter.filename`: Generated markdown filename
+- `formatter.file_size`: Size of generated markdown file
+- `formatter.format_style`: Formatting style used
+- `formatter.content_filtering`: Content filtering applied
+- `formatter.success_rate`: Formatting success percentage
+
+**🔄 Pipeline Metrics:**
+- `pipeline.total_duration`: End-to-end execution time
+- `pipeline.tool_sequence`: Order of tool execution
+- `pipeline.success_rate`: Overall pipeline success rate
+- `pipeline.error_types`: Types of errors encountered
+
+### Alternative Platforms
+- **Opik**: Built-in OpenTelemetry support with Comet integration
+- **LangWatch**: Automatic tracing with dashboard visualization
 
 ### Legacy Commands
 

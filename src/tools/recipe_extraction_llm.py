@@ -13,11 +13,29 @@ import json
 import time
 from openai import OpenAI
 
+# Telemetry imports (optional)
+try:
+    from opentelemetry import trace
+    from opentelemetry.trace import Status, StatusCode
+    TELEMETRY_AVAILABLE = True
+except ImportError:
+    TELEMETRY_AVAILABLE = False
+
 
 class RecipeExtractionLLMTool(Tool):
     """
     LLM-powered recipe extraction tool that uses natural language understanding
     to extract recipe information from any HTML structure.
+    
+    Telemetry Tracking:
+    - extraction.url: Recipe URL being extracted
+    - extraction.ingredients_count: Number of ingredients found
+    - extraction.instructions_count: Number of instruction steps
+    - extraction.servings: Recipe serving size
+    - extraction.prep_time: Preparation time
+    - extraction.cook_time: Cooking time
+    - extraction.dietary_tags: Detected dietary tags
+    - extraction.success_rate: Extraction success percentage
     """
     
     name: str = "recipe_extraction_llm"

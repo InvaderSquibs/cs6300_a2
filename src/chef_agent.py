@@ -28,6 +28,16 @@ from tools.recipe_formatter_llm import RecipeFormatterLLMTool
 # Load environment variables
 dotenv.load_dotenv()
 
+# Configure Phoenix Telemetry (Optional)
+# Enable telemetry by setting ENABLE_TELEMETRY=true environment variable
+# or by importing telemetry_config module
+try:
+    from telemetry_config import auto_enable_telemetry
+    auto_enable_telemetry()
+except ImportError:
+    # Telemetry config not available, continue without telemetry
+    pass
+
 
 def create_chef_agent():
     """
@@ -489,22 +499,54 @@ def run_natural_language_request_with_queue(user_prompt, dietary_restrictions=No
     print("=" * 60)
     
     try:
-        # Step 1: Search for recipes once
+        # Step 1: Search for recipes using the agent
         print("🔍 Step 1: Searching for recipes...")
-        from tools.recipe_search import RecipeSearchTool
-        search_tool = RecipeSearchTool()
         
         # Extract the recipe request from the user prompt using LLM
         search_query = _extract_recipe_query_from_prompt(user_prompt)
         print(f"🔍 Extracted search query: '{search_query}'")
         
+        # Create agent and use it to search for recipes
+        agent = create_chef_agent()
+        
+        # Build search prompt for the agent
         if dietary_restrictions:
-            search_result = search_tool.forward(search_query, dietary_restrictions)
+            search_prompt = f"""Search for recipes using the recipe_search tool.
+
+Query: "{search_query}"
+Dietary restrictions: {', '.join(dietary_restrictions)}
+
+Call recipe_search(query='{search_query}', dietary_restrictions={dietary_restrictions}) and store the result in a variable called 'search_result'.
+
+Then call final_answer(search_result) with the raw JSON result from the tool."""
         else:
-            search_result = search_tool.forward(search_query)
+            search_prompt = f"""Search for recipes using the recipe_search tool.
+
+Query: "{search_query}"
+
+Call recipe_search(query='{search_query}') and store the result in a variable called 'search_result'.
+
+Then call final_answer(search_result) with the raw JSON result from the tool."""
+        
+        print("🔧 Calling recipe_search through agent for telemetry tracking...")
+        search_result = agent.run(search_prompt)
         
         import json
-        search_data = json.loads(search_result)
+        # The agent might return a string or dict, handle both cases
+        if isinstance(search_result, str):
+            try:
+                search_data = json.loads(search_result)
+            except json.JSONDecodeError:
+                # If it's not JSON, try to extract JSON from the string
+                import re
+                json_match = re.search(r'\{.*\}', search_result, re.DOTALL)
+                if json_match:
+                    search_data = json.loads(json_match.group())
+                else:
+                    print(f"❌ Could not parse search result: {search_result}")
+                    return
+        else:
+            search_data = search_result
         
         print(f"🔍 Search result: {search_result[:200]}...")
         print(f"🔍 Search success: {search_data.get('success')}")
@@ -536,7 +578,7 @@ def run_natural_language_request_with_queue(user_prompt, dietary_restrictions=No
             print(f"  {i+1}. {recipe['title']}")
         
         # Step 3: Process recipes one by one using the agent for extraction
-        agent = create_chef_agent()
+        # (agent already created in Step 1)
         
         for i, recipe in enumerate(recipe_queue):
             print(f"\n🔍 Step {i+2}: Trying recipe {i+1}/{len(recipe_queue)}")

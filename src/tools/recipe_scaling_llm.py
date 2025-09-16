@@ -11,11 +11,27 @@ import json
 import time
 from openai import OpenAI
 
+# Telemetry imports (optional)
+try:
+    from opentelemetry import trace
+    from opentelemetry.trace import Status, StatusCode
+    TELEMETRY_AVAILABLE = True
+except ImportError:
+    TELEMETRY_AVAILABLE = False
+
 
 class RecipeScalingLLMTool(Tool):
     """
     LLM-powered recipe scaling tool that uses natural language understanding
     to scale recipes, detect serving sizes, and handle unit conversions.
+    
+    Telemetry Tracking:
+    - scaling.original_servings: Original recipe servings
+    - scaling.target_servings: Target servings requested
+    - scaling.scaling_factor: Mathematical scaling factor (e.g., 2.0 for 4→8)
+    - scaling.scaling_method: Method used (proportional, time_adjusted)
+    - scaling.unit_conversions_count: Number of unit conversions performed
+    - scaling.success_rate: Scaling success percentage
     """
     
     name: str = "recipe_scaling_llm"
@@ -62,6 +78,21 @@ class RecipeScalingLLMTool(Tool):
         Returns:
             str: JSON string with scaled recipe data
         """
+        # Start telemetry span if available
+        if TELEMETRY_AVAILABLE:
+            tracer = trace.get_tracer(__name__)
+            with tracer.start_as_current_span("recipe_scaling_llm") as span:
+                span.set_attribute("tool.name", "recipe_scaling_llm")
+                span.set_attribute("tool.target_servings", target_servings)
+                span.set_attribute("tool.user_prompt", user_prompt or "")
+                return self._scale_recipe_with_telemetry(recipe_data, target_servings, user_prompt, span)
+        else:
+            return self._scale_recipe_with_telemetry(recipe_data, target_servings, user_prompt, None)
+    
+    def _scale_recipe_with_telemetry(self, recipe_data: str, target_servings: str, user_prompt: str = None, span=None) -> str:
+        """
+        Internal method to scale recipe with telemetry tracking.
+        """
         try:
             # Parse recipe data
             recipe = json.loads(recipe_data)
@@ -76,7 +107,19 @@ class RecipeScalingLLMTool(Tool):
             recipe_info = recipe['recipe']
             
             # Use LLM to determine target servings and scale the recipe
-            scaled_result = self._scale_with_llm(recipe_info, target_servings, user_prompt)
+            scaled_result = self._scale_with_llm(recipe_info, target_servings, user_prompt, span)
+            
+            # Add telemetry attributes for successful scaling
+            if span and scaled_result.get('success'):
+                scaling_info = scaled_result.get('scaling_info', {})
+                span.set_attribute("scaling.original_servings", scaling_info.get('original_servings', 'unknown'))
+                span.set_attribute("scaling.target_servings", scaling_info.get('target_servings', 'unknown'))
+                span.set_attribute("scaling.scaling_factor", scaling_info.get('scaling_factor', 'unknown'))
+                span.set_attribute("scaling.scaling_method", scaling_info.get('scaling_method', 'unknown'))
+                span.set_attribute("scaling.unit_conversions_count", len(scaling_info.get('unit_conversions', [])))
+                span.set_status(Status(StatusCode.OK))
+            elif span:
+                span.set_status(Status(StatusCode.ERROR, "Scaling failed"))
             
             return json.dumps(scaled_result)
             
@@ -93,7 +136,7 @@ class RecipeScalingLLMTool(Tool):
                 "original_recipe": recipe_data
             })
     
-    def _scale_with_llm(self, recipe: dict, target_servings: str, user_prompt: str = None) -> dict:
+    def _scale_with_llm(self, recipe: dict, target_servings: str, user_prompt: str = None, span=None) -> dict:
         """
         Use LLM to scale recipe with natural language understanding.
         

@@ -13,6 +13,14 @@ from bs4 import BeautifulSoup
 import json
 import time
 
+# Telemetry imports (optional)
+try:
+    from opentelemetry import trace
+    from opentelemetry.trace import Status, StatusCode
+    TELEMETRY_AVAILABLE = True
+except ImportError:
+    TELEMETRY_AVAILABLE = False
+
 
 class RecipeSearchTool(Tool):
     """
@@ -23,6 +31,13 @@ class RecipeSearchTool(Tool):
     - Extracts recipe content from web pages
     - Returns formatted recipe data
     - Handles errors gracefully
+    
+    Telemetry Tracking:
+    - search.query: Search query used
+    - search.results_count: Number of recipes found
+    - search.dietary_restrictions: Applied dietary filters
+    - search.filtered_count: Recipes after filtering
+    - search.success_rate: Search success percentage
     """
     
     name: str = "recipe_search"

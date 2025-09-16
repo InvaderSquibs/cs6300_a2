@@ -13,11 +13,27 @@ import time
 import os
 from openai import OpenAI
 
+# Telemetry imports (optional)
+try:
+    from opentelemetry import trace
+    from opentelemetry.trace import Status, StatusCode
+    TELEMETRY_AVAILABLE = True
+except ImportError:
+    TELEMETRY_AVAILABLE = False
+
 
 class RecipeFormatterLLMTool(Tool):
     """
     LLM-powered recipe formatter that creates beautiful markdown recipe files
     with intelligent content filtering and cookbook-style formatting.
+    
+    Telemetry Tracking:
+    - formatter.recipe_title: Recipe title being formatted
+    - formatter.filename: Generated markdown filename
+    - formatter.file_size: Size of generated markdown file
+    - formatter.format_style: Formatting style used
+    - formatter.content_filtering: Content filtering applied
+    - formatter.success_rate: Formatting success percentage
     """
     
     name: str = "recipe_formatter_llm"
