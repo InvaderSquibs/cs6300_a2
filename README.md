@@ -22,8 +22,23 @@ A multi-tooled AI agent that helps with recipe curation, scaling, and formatting
    ```
    GPT_ENDPOINT=http://192.168.1.27:1234/v1
    MODEL_ID=qwen/qwen3-4b-2507
-   GEMINI_API_KEY=your_api_key_here
+   GEMINI_API_KEY=""
+   OPENAI_API_KEY=""
    ```
+
+   **Note:** The system is configured to use a local LLM server. You can either:
+   - Use the provided local server endpoint (recommended for testing)
+   - Set up your own local LLM server
+   - Modify the endpoint to use cloud services (OpenAI, Gemini, etc.)
+
+## Quick Start
+
+1. **Set up your `.env` file** with the required environment variables (see Installation above)
+2. **Run a simple test:**
+   ```bash
+   python3.11 src/chef_agent.py "I'd like some pancakes please"
+   ```
+3. **Check the output:** Recipe files will be generated in `results/recipes/`
 
 ## Usage
 
