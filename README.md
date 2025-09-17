@@ -150,7 +150,7 @@ python3.11 src/chef_agent.py
 
 ## Output
 
-The AI Chef Assistant generates beautiful markdown recipe files in the `results/` directory. Each recipe includes:
+The AI Chef Assistant generates beautiful markdown recipe files in the `results/recipes/` directory. Each recipe includes:
 
 - **Professional formatting** with clear sections and headers
 - **Complete ingredient lists** with proper measurements
@@ -161,10 +161,10 @@ The AI Chef Assistant generates beautiful markdown recipe files in the `results/
 
 ### Example Output File
 
-Recipes are saved as markdown files in the `results/` directory, for example:
-- `results/vegan_pancakes.md`
-- `results/chocolate_chip_cookies.md`
-- `results/gluten_free_bread.md`
+Recipes are saved as markdown files in the `results/recipes/` directory, for example:
+- `results/recipes/vegan_pancakes.md`
+- `results/recipes/chocolate_chip_cookies.md`
+- `results/recipes/gluten_free_bread.md`
 
 ## Supported Dietary Restrictions
 

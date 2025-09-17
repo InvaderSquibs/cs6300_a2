@@ -41,7 +41,7 @@ class RecipeFormatterLLMTool(Tool):
         "Formats recipes into beautiful markdown files using LLM natural language understanding. "
         "Creates cookbook-style recipes with proper structure, headers, and formatting. "
         "Intelligently filters out irrelevant content and focuses on essential recipe information. "
-        "Outputs are saved as .md files in the 'results/' directory with clean, professional formatting."
+        "Outputs are saved as .md files in the 'results/recipes/' directory with clean, professional formatting."
     )
     output_type: str = "string"
     
@@ -91,10 +91,10 @@ class RecipeFormatterLLMTool(Tool):
             >>> result = tool.forward(recipe_json, "vegan_pancakes.md")
             >>> data = json.loads(result)
             >>> print(data["formatted_recipe"]["file_path"])
-            results/vegan_pancakes.md
+            results/recipes/vegan_pancakes.md
             
         Note:
-            The formatted markdown file is automatically saved to the 'results/' directory.
+            The formatted markdown file is automatically saved to the 'results/recipes/' directory.
             If output_filename is None, a clean filename is generated from the recipe title.
         """
         try:
@@ -190,6 +190,7 @@ INSTRUCTIONS:
 8. Include a clear title, description, ingredients list, and step-by-step instructions
 9. Add timing information in a clear, readable format
 10. Include serving information and dietary tags if available
+11. Add a source link at the bottom of the recipe if URL is available
 
 FORMATTING REQUIREMENTS:
 - Use # for main title
@@ -201,6 +202,12 @@ FORMATTING REQUIREMENTS:
 - Use *italics* for emphasis
 - Include proper spacing and line breaks
 - Make it visually appealing and easy to read
+- If a URL is provided in the recipe data, add a "Source" section at the bottom with the link
+
+SOURCE LINK FORMATTING:
+- Add a "## Source" section at the very end of the recipe
+- Format the link as: [Original Recipe URL](URL)
+- Only include this section if a valid URL is available
 
 Return ONLY the markdown content, no other text or explanation."""
 
@@ -313,8 +320,8 @@ Return ONLY the markdown content, no other text or explanation."""
         Returns:
             str: Full file path
         """
-        # Create results directory if it doesn't exist
-        results_dir = "results"
+        # Create results/recipes directory if it doesn't exist
+        results_dir = "results/recipes"
         if not os.path.exists(results_dir):
             os.makedirs(results_dir)
         

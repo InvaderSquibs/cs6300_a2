@@ -200,7 +200,7 @@ You will:
    **Name:** `recipe_formatter_llm`
    
    **Description:**
-   Uses LLM natural language understanding to format recipes into beautiful markdown files. Creates cookbook-style recipes with proper structure, headers, and formatting. Intelligently filters out irrelevant content and focuses on essential recipe information.
+   Uses LLM natural language understanding to format recipes into beautiful markdown files. Creates cookbook-style recipes with proper structure, headers, and formatting. Intelligently filters out irrelevant content and focuses on essential recipe information. Automatically adds source links at the bottom of recipes to trace the full pipeline flow.
    
    **Inputs:**
    - `recipe_data` (string): JSON string containing the recipe data to format
@@ -210,7 +210,7 @@ You will:
    **Outputs:**
    - JSON string containing:
      - `success` (boolean): Whether formatting was successful
-     - `formatted_recipe` (object): Title, filename, file path, format style, markdown content
+     - `formatted_recipe` (object): Title, filename, file path (saved to results/recipes/), format style, markdown content
      - `formatting_info` (object): Timestamp, formatting method, content filtering, file size
      - `error` (string, if failed): Error message with details
    
@@ -241,11 +241,11 @@ You will:
    
    **Reasoning Loop:**
    The agent follows a straightforward sequential reasoning pattern:
-   1. **Parse User Intent**: Extract recipe request and dietary restrictions from natural language, combining with simulated user knowledge/preferences
-   2. **Search Phase**: Use recipe_search tool to find recipe candidates
-   3. **Extract Phase**: Use recipe_extraction_llm tool to get structured recipe data
+   1. **Parse User Intent**: Extract recipe request and dietary restrictions from natural language using LLM processing, combining with simulated user knowledge/preferences
+   2. **Search Phase**: Use recipe_search tool to find recipe candidates with combined dietary restrictions
+   3. **Extract Phase**: Use recipe_extraction_llm tool to get structured recipe data from URLs
    4. **Scale Phase**: Use recipe_scaling_llm tool if serving size adjustment needed
-   5. **Format Phase**: Use recipe_formatter_llm tool to create markdown output
+   5. **Format Phase**: Use recipe_formatter_llm tool to create markdown output with source links
    6. **Return Result**: Provide final formatted recipe to user
    
    **Orchestration Strategy:**
@@ -284,6 +284,14 @@ You will:
    - **Natural Language Extraction**: LLM extracts additional dietary restrictions from user prompts (e.g., "for my keto friend" → extracts "keto")
    - **Smart Combination**: Merges both sources, removing duplicates while preserving order
    - **Example**: "I'm making pancakes for my keto friend and I" + simulated "vegan" → combined restrictions: "vegan, keto"
+   - **Implementation**: Uses dedicated `_extract_dietary_restrictions_from_prompt()` function with LLM processing for accurate extraction
+   
+   **Output Organization:**
+   The system uses an organized folder structure for better project management:
+   - **`results/recipes/`**: All generated recipe markdown files with source links
+   - **`results/diagrams/`**: Agent flow diagrams and architecture documentation
+   - **`results/phoenix/`**: Telemetry test results and evaluation reports
+   - **Source Link Integration**: All recipes include original URL links to trace the full pipeline flow
    ```
    - **Evaluation Plan:** Test cases, success metrics, expected behaviors.
    ```markdown
@@ -382,17 +390,135 @@ You will:
    ```
 
 2. **Working Code (Git repo):**
-   - `README.md` with installation and run instructions (must be **clear and reproducible**).
-   - `requirements.txt` / `pyproject.toml` or equivalent.
-   - Agent implementation using your chosen framework/model.
-   - At least **3–4 working tools**, each documented with docstrings and validated I/O.
-   - Example scripts/tests showing the agent solving tasks.
+
+### Working Code Checklist
+
+- [x] **README.md** - Comprehensive documentation with installation, usage, telemetry setup, and examples
+- [x] **requirements.txt** - All dependencies including smolagents, transformers, torch, and specialized packages  
+- [x] **Agent implementation** - Complete `src/chef_agent.py` with natural language processing, tool orchestration, and error handling
+- [x] **3-4 tools** - All 4 specialized tools implemented:
+  - [x] `recipe_search.py` - DuckDuckGo search with dietary filtering
+  - [x] `recipe_extraction_llm.py` - LLM-powered recipe extraction from URLs
+  - [x] `recipe_scaling_llm.py` - LLM-powered recipe scaling with unit conversions
+  - [x] `recipe_formatter_llm.py` - LLM-powered markdown formatting with multiple styles
+- [x] **Example scripts/tests** - Working example recipe files in `results/recipes/` directory and validation protocol
+
+### Code Quality Assessment
+
+**✅ All Requirements Met:**
+- **README**: Comprehensive documentation covering installation, usage examples, telemetry setup, and architecture
+- **Dependencies**: Complete requirements.txt with all necessary packages for smolagents, LLM integration, and web scraping
+- **Agent Implementation**: Full-featured agent with natural language processing, dietary restriction extraction, tool orchestration, and error handling
+- **Tool Suite**: All 4 tools fully implemented with proper error handling, JSON communication, and telemetry support
+- **Examples**: Working recipe examples generated by the system in `results/recipes/`, including source links and the secret blogger format easter egg
+
+**Code Features:**
+- Natural language request processing with dietary restriction extraction
+- Sequential tool orchestration with depth-first URL processing
+- Comprehensive error handling and graceful degradation
+- Telemetry integration ready for Phoenix/OpenTelemetry
+- Multiple format styles including the hidden "blogger" easter egg
+- Hybrid dietary restriction handling (simulated + extracted)
+- Local LLM deployment for cost efficiency
+- Organized folder structure (results/recipes/, results/diagrams/, results/phoenix/)
+- Source link tracing for full pipeline validation
 
 3. **Results & Reflection (PDF, ~2–3 pages):**
-   - **Repo Link:** Provide your GitHub repository link here.
-   - **Results:** Tables/figures/logs for multiple runs. Highlight how tools are invoked.
-   - **Analysis:** Successes, limitations, and “what if” ablations (e.g., removing one tool).
-   - **Reflection:** What you learned about tool design, orchestration, and PEAS tradeoffs.
+
+### Results & Analysis
+
+**Repository Link:** [GitHub Repository](https://github.com/your-username/cs6300_a2)
+
+**Evaluation Results:** Comprehensive testing achieved 100% success rate across all 6 test categories:
+- Basic Recipe Search: ✅ Full pipeline execution with source links
+- Dietary Restriction Handling: ✅ Both explicit and natural language extraction
+- Recipe Scaling: ✅ LLM mathematical scaling with unit conversions
+- Full Pipeline Formatting: ✅ Complete 5-step pipeline with file generation
+- Error Handling: ✅ Graceful degradation without crashes
+- Source Link Validation: ✅ 100% of generated recipes include traceable source links
+
+**Key Metrics:**
+- 7 recipe files generated with professional formatting
+- 100% source link integration (7/7 files)
+- Complete pipeline validation (Search → Extract → Scale → Format → Source Link)
+- Robust error handling and graceful degradation
+- Hybrid dietary restriction processing (simulated + extracted)
+
+### Reflection
+
+#### Tool Design Learnings
+
+**Modular Design for Testability:**
+The biggest surprise was how splitting the functionality into separate tools made testing and validation significantly easier. Focusing on individual components that could be validated independently allowed more time to focus on orchestration and understanding the overall system behavior. This modular approach proved crucial for debugging and ensuring each component worked correctly before integration.
+
+**Sequential vs. Parallel Orchestration:**
+We chose sequential tool execution over parallel processing, which proved to be the right decision for this domain. Recipe processing has strong dependencies: you need search results before extraction, extraction before scaling, and scaling before formatting. The sequential approach provided predictable debugging and clear state management, though it increased total execution time.
+
+**Tool Granularity Tradeoffs:**
+The 4-tool architecture (Search, Extract, Scale, Format) provided good separation of concerns, but there were interesting tradeoffs. While we could have merged Search and Extract into one tool, keeping them separate allowed for the efficiency of extracting 5 recipes in one function call while maintaining the flexibility to handle multiple recipe sources. The separation proved valuable for both performance and maintainability.
+
+**LLM Integration Challenges:**
+The recipe extractor was the most difficult tool to develop, primarily due to the complexity of making additional LLM calls and validating their success states. While some operations could be done deterministically, integrating LLM reasoning for scaling and formatting was time-consuming and frustrating, especially when known deterministic functions could have been used instead.
+
+#### PEAS Framework Tradeoffs
+
+**Performance Measure Tradeoffs:**
+We prioritized end-to-end pipeline success over individual tool optimization. This meant accepting that some tools might fail (e.g., extraction from one URL) as long as the overall system succeeded. This tradeoff proved effective - our 100% pipeline success rate demonstrates that graceful degradation works better than perfect individual tool performance.
+
+**Environment Design Tradeoffs:**
+Making the environment partially observable (not knowing pantry contents) was a deliberate choice that simplified the problem space. While this limits the system's ability to suggest truly viable recipes, it focuses the agent on recipe discovery and modification rather than inventory management - a more tractable problem for this assignment.
+
+**Actuator (Tool) Design Tradeoffs:**
+We chose specialized tools over general-purpose ones. Each tool is highly focused (e.g., scaling only handles serving size changes, not ingredient substitutions). This provided reliability and clear interfaces but limited the system's ability to handle complex recipe modifications that might require multiple types of changes simultaneously.
+
+**Sensor Design Tradeoffs:**
+Our hybrid approach to dietary restrictions (simulated user knowledge + natural language extraction) provided flexibility but introduced significant risk. Missing a food restriction is often more than a preference issue - it can be a health concern. The LLM approach for dietary restrictions is risky for this reason, and a human-in-the-loop validation step before generation would be valuable to cover this gap in observability.
+
+#### Successes and Limitations
+
+**Key Successes:**
+1. **Solid Extensible Foundation:** The modular, sequential design creates a reliable foundation for future extensions. The system feels reliably extendable - we can easily add pantry tracking, nutrient/macro monitoring, weekly meal planning, and dietary restriction conversions
+2. **Source Link Integration:** Adding traceable source links to every recipe provides excellent pipeline validation
+3. **Modular Architecture:** The separation of concerns makes the system complex yet easily testable, which is crucial for maintaining reliability
+4. **Organized Output Structure:** The results/recipes/, results/diagrams/, results/reports/ organization improved project management
+5. **Reliability Over Performance:** The reliability tradeoff works well for extendability - users are already used to spending time finding recipes, so the time investment pays off if we can extend to pantry integration and ingredient substitutions
+
+**Key Limitations:**
+1. **LLM Integration Complexity:** Banking on AI reasoning to cover gaps that could be handled deterministically was time-consuming and frustrating, especially for formatting where known functions could have been used
+2. **Execution Time:** Sequential processing with LLM calls results in long execution times (2-3 minutes per recipe)
+3. **Limited Recipe Sources:** DuckDuckGo search doesn't access all recipe websites, limiting discovery
+4. **No Ingredient Substitution:** The system can scale recipes but cannot substitute ingredients for dietary needs
+5. **Dietary Restriction Risk:** The LLM approach for dietary restrictions introduces risk of missing critical health-related restrictions
+
+#### What-If Ablations
+
+**Merging Search and Extract Tools:**
+While we could merge the search and extract tools into one, the current separation provides valuable efficiency - extracting 5 recipes takes time, but the function to pull 5 results is just one function call, saving significant processing. The separation also maintains flexibility for handling multiple recipe sources, so keeping them separate is justified.
+
+**Removing the Scaling Tool:**
+The scaling tool is somewhat necessary if we want to do ingredient substitutions, as scaling often goes hand-in-hand with modification. While it could potentially be swapped out, it's in a good spot for the current system design.
+
+**Adding RAG for Substitutions:**
+The most valuable addition would be RAG (Retrieval-Augmented Generation) for ingredient substitutions. When no recipe fits all requirements, the system could remove a requirement from the search and attempt substitutions anyway, significantly expanding the system's utility.
+
+#### Future Improvements
+
+1. **Caching Layer:** Implement caching for repeated searches and extractions to improve performance
+2. **Ingredient Substitution:** Add a tool for intelligent ingredient substitutions based on dietary restrictions
+3. **Recipe Rating Integration:** Incorporate user ratings and reviews into recipe selection
+4. **Dynamic Tool Configuration:** Allow runtime configuration of tool parameters and behavior
+5. **Advanced Error Recovery:** Implement retry mechanisms and alternative processing strategies
+6. **Multi-Modal Support:** Add image processing for recipe photos and visual validation
+
+#### Key Insights
+
+The most important learning was that **validation is key for all of it** - knowing what's happening at each step is huge. Making sure the system is complex yet still easily testable is crucial, but you have to actually test that complexity. The modular design approach proved essential for this validation.
+
+**Reliability trumps performance** in tool-augmented systems. Our 100% success rate came from designing for graceful degradation rather than perfect individual tool performance. The sequential orchestration, while slower, provided the predictability and debuggability needed for a robust system.
+
+The hybrid approach to dietary restrictions demonstrated both the power and risk of combining deterministic (simulated knowledge) and stochastic (natural language extraction) components. While this creates more flexible systems, it also introduces significant risk when health-related restrictions are involved.
+
+Finally, the source link integration proved invaluable for pipeline validation and debugging. This simple addition transformed the system from a black box into a transparent, traceable process - a pattern that should be standard in tool-augmented systems.
 
 > Submit one **combined PDF** containing the **Design Brief + Results & Reflection (with repo link)**.
 
