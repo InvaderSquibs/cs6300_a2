@@ -67,7 +67,7 @@ def create_chef_agent():
         tools=tools,
         model=model,
         additional_authorized_imports=['json'],
-        max_steps=3  # Reduce steps to prevent loops
+        max_steps=10  # Increased to allow full pipeline completion
     )
     
     return agent
@@ -433,6 +433,62 @@ def run_interactive():
         print(f"❌ Failed to start interactive mode: {e}")
 
 
+def _extract_dietary_restrictions_from_prompt(user_prompt):
+    """
+    Extract dietary restrictions from a natural language prompt using LLM.
+    
+    Args:
+        user_prompt (str): The user's natural language request
+        
+    Returns:
+        list: List of dietary restrictions found in the prompt
+    """
+    from openai import OpenAI
+    import os
+    
+    client = OpenAI(
+        base_url=os.getenv("GPT_ENDPOINT"),
+        api_key=os.getenv("OPENAI_API_KEY", "dummy-key")
+    )
+    
+    prompt = f"""Extract dietary restrictions from this user prompt. Return ONLY a comma-separated list of dietary restrictions, or "none" if none found.
+
+Common dietary restrictions to look for:
+- vegan, vegetarian, keto, paleo, gluten-free, dairy-free, nut-free, soy-free, sugar-free, low-carb, high-protein
+
+Examples:
+- "I'm making pancakes for my keto friend" → "keto"
+- "I need a vegan gluten-free recipe" → "vegan,gluten-free"
+- "I want some cookies" → "none"
+- "My friend is allergic to nuts" → "nut-free"
+- "I'm on a paleo diet" → "paleo"
+
+User prompt: "{user_prompt}"
+
+Dietary restrictions:"""
+
+    try:
+        response = client.chat.completions.create(
+            model=os.getenv("MODEL_ID", "google/gemma-3-27b"),
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=50,
+            temperature=0.1
+        )
+        
+        result = response.choices[0].message.content.strip().lower()
+        
+        if result == "none" or not result:
+            return []
+        
+        # Split by comma and clean up
+        restrictions = [r.strip() for r in result.split(',')]
+        return [r for r in restrictions if r]  # Remove empty strings
+        
+    except Exception as e:
+        print(f"⚠️ LLM dietary restriction extraction failed: {e}")
+        return []
+
+
 def _extract_recipe_query_from_prompt(user_prompt):
     """
     Extract the recipe query from a natural language prompt using LLM.
@@ -481,13 +537,14 @@ Recipe query:"""
         return "cookies"  # fallback
 
 
-def run_natural_language_request_with_queue(user_prompt, dietary_restrictions=None):
+def run_natural_language_request_with_queue(user_prompt, dietary_restrictions=None, format_style='cookbook'):
     """
     Run a natural language request using a queue-based approach for better reliability.
     
     Args:
         user_prompt (str): The user's natural language request
         dietary_restrictions (list): List of dietary restrictions (e.g., ['vegan', 'keto'])
+        format_style (str): Format style for the final recipe ('cookbook', 'simple', 'detailed', 'blogger')
     """
     print("🧑‍🍳 AI Chef Assistant - Natural Language Request (Queue-Based)")
     print("=" * 60)
@@ -506,17 +563,37 @@ def run_natural_language_request_with_queue(user_prompt, dietary_restrictions=No
         search_query = _extract_recipe_query_from_prompt(user_prompt)
         print(f"🔍 Extracted search query: '{search_query}'")
         
+        # Extract dietary restrictions from the user prompt
+        extracted_restrictions = _extract_dietary_restrictions_from_prompt(user_prompt)
+        if extracted_restrictions:
+            print(f"🔍 Extracted dietary restrictions from prompt: {', '.join(extracted_restrictions)}")
+        
+        # Combine simulated dietary restrictions with extracted ones
+        all_restrictions = []
+        if dietary_restrictions:
+            all_restrictions.extend(dietary_restrictions)
+        if extracted_restrictions:
+            all_restrictions.extend(extracted_restrictions)
+        
+        # Remove duplicates while preserving order
+        combined_restrictions = list(dict.fromkeys(all_restrictions))
+        
+        if combined_restrictions:
+            print(f"🥗 Combined dietary restrictions: {', '.join(combined_restrictions)}")
+            if dietary_restrictions and extracted_restrictions:
+                print(f"   (Simulated: {', '.join(dietary_restrictions)} + Extracted: {', '.join(extracted_restrictions)})")
+        
         # Create agent and use it to search for recipes
         agent = create_chef_agent()
         
         # Build search prompt for the agent
-        if dietary_restrictions:
+        if combined_restrictions:
             search_prompt = f"""Search for recipes using the recipe_search tool.
 
 Query: "{search_query}"
-Dietary restrictions: {', '.join(dietary_restrictions)}
+Dietary restrictions: {', '.join(combined_restrictions)}
 
-Call recipe_search(query='{search_query}', dietary_restrictions={dietary_restrictions}) and store the result in a variable called 'search_result'.
+Call recipe_search(query='{search_query}', dietary_restrictions={combined_restrictions}) and store the result in a variable called 'search_result'.
 
 Then call final_answer(search_result) with the raw JSON result from the tool."""
         else:
@@ -700,14 +777,14 @@ if data['success'] and data['recipe']['ingredients'] and data['recipe']['instruc
                     if scaling_result:
                         # Step 5: Format the scaled recipe into a markdown file
                         print(f"\n🔍 Step {i+4}: Formatting recipe into markdown file...")
-                        format_result = format_recipe_if_needed(scaling_result, user_prompt, agent)
+                        format_result = format_recipe_if_needed(scaling_result, user_prompt, agent, format_style)
                         if format_result:
                             return format_result
                         return scaling_result
                     
                     # Step 5: Format the original recipe into a markdown file
                     print(f"\n🔍 Step {i+4}: Formatting recipe into markdown file...")
-                    format_result = format_recipe_if_needed(final_result, user_prompt, agent)
+                    format_result = format_recipe_if_needed(final_result, user_prompt, agent, format_style)
                     if format_result:
                         return format_result
                     
@@ -946,7 +1023,7 @@ IMPORTANT: Do NOT call final_answer() in this step. Just return the scaled recip
         return None
 
 
-def format_recipe_if_needed(recipe_data, user_prompt, agent):
+def format_recipe_if_needed(recipe_data, user_prompt, agent, format_style='cookbook'):
     """
     Format the recipe into a beautiful markdown file.
     
@@ -954,6 +1031,7 @@ def format_recipe_if_needed(recipe_data, user_prompt, agent):
         recipe_data (dict): The recipe data (original or scaled)
         user_prompt (str): The original user prompt
         agent: The agent instance
+        format_style (str): Format style for the recipe ('cookbook', 'simple', 'detailed', 'blogger')
         
     Returns:
         dict: Formatted recipe data with file path if successful, None otherwise
@@ -994,7 +1072,7 @@ Recipe data: {recipe_json}
 IMPORTANT: The recipe_formatter_llm tool expects a JSON STRING, not a dictionary.
 
 Follow these steps exactly:
-1. Call recipe_formatter_llm(recipe_data=recipe_json, output_filename=None, format_style='cookbook')
+1. Call recipe_formatter_llm(recipe_data=recipe_json, output_filename=None, format_style='{format_style}')
 2. The result is a JSON STRING - you need to parse it with json.loads()
 3. Parse the result: import json; result_data = json.loads(formatted_result)
 4. Check if result_data['success'] is True and return the formatted recipe data
@@ -1114,6 +1192,9 @@ def main():
             # Parse dietary restrictions (comma-separated)
             restrictions_list = [r.strip().lower() for r in restrictions_str.split(',')]
             run_natural_language_request_with_queue(user_prompt, restrictions_list)
+        elif flag == '-v' and restrictions_str == 'blogger':
+            # Secret easter egg: blogger format
+            run_natural_language_request_with_queue(user_prompt, None, format_style='blogger')
         else:
             # Legacy command format
             command = sys.argv[1].lower()

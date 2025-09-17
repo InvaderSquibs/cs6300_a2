@@ -167,7 +167,8 @@ class RecipeFormatterLLMTool(Tool):
         style_instructions = {
             "cookbook": "Format like a professional cookbook with elegant headers, clear sections, and beautiful typography",
             "simple": "Format in a clean, simple style with minimal decoration but clear structure",
-            "detailed": "Format with comprehensive details, tips, and extensive formatting"
+            "detailed": "Format with comprehensive details, tips, and extensive formatting",
+            "blogger": "Format like a heartfelt personal blog post with a long, emotional story about life, family, memories, and why this recipe means so much. The story should be drawn out, over-the-top, barely relate to the recipe, and end with 'anyways here's that recipe'. Make it very bloggy and personal."
         }
         
         prompt = f"""You are a professional recipe formatter. Create a beautiful markdown recipe file.

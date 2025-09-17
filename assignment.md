@@ -237,11 +237,11 @@ You will:
    - **Endpoint**: `http://192.168.1.27:1234/v1` (local LLM server)
    - **Rationale**: Chosen for fast local tool calling without running up cloud credits
    - **API Compatibility**: OpenAI-compatible interface for seamless integration
-   - **Max Steps**: 3 (configured to prevent infinite loops - may need adjustment for full pipeline)
+   - **Max Steps**: 10 (configured to allow full 4-tool pipeline completion)
    
    **Reasoning Loop:**
    The agent follows a straightforward sequential reasoning pattern:
-   1. **Parse User Intent**: Extract recipe request from natural language (dietary restrictions currently passed as parameters to simulate user knowledge/preferences)
+   1. **Parse User Intent**: Extract recipe request and dietary restrictions from natural language, combining with simulated user knowledge/preferences
    2. **Search Phase**: Use recipe_search tool to find recipe candidates
    3. **Extract Phase**: Use recipe_extraction_llm tool to get structured recipe data
    4. **Scale Phase**: Use recipe_scaling_llm tool if serving size adjustment needed
@@ -276,6 +276,14 @@ You will:
    - **State-Based Architecture**: Each tool modifies the recipe state in place
    - **Queue-Based URL Processing**: Tries multiple recipe sources for better success rates
    - **Graceful Degradation**: System continues working even if individual tools fail
+   - **Hybrid Dietary Restriction Handling**: Combines simulated user knowledge with natural language extraction
+   
+   **Dietary Restriction Processing:**
+   The agent uses a hybrid approach to handle dietary restrictions:
+   - **Simulated User Knowledge**: Dietary restrictions passed as parameters (e.g., `--restrictions "vegan"`) simulate known user preferences or dietary needs
+   - **Natural Language Extraction**: LLM extracts additional dietary restrictions from user prompts (e.g., "for my keto friend" → extracts "keto")
+   - **Smart Combination**: Merges both sources, removing duplicates while preserving order
+   - **Example**: "I'm making pancakes for my keto friend and I" + simulated "vegan" → combined restrictions: "vegan, keto"
    ```
    - **Evaluation Plan:** Test cases, success metrics, expected behaviors.
    ```markdown
